@@ -34,11 +34,6 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
 
-        <link href="{{ $publicBase }}/build/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
-        <!-- jQuery読み込み -->
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
-        <script src="{{ $publicBase }}/build/bootstrap/js/bootstrap.min.js"></script>
-
         <!-- Scripts -->
         <script src="{{ $publicBase }}/sw.js"></script>
         @vite(['resources/css/app.css', 'resources/js/app.js'])

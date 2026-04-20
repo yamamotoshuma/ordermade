@@ -31,4 +31,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'google_sheets' => [
+        'service_account_path' => env('GOOGLE_SERVICE_ACCOUNT_PATH', 'storage/app/private/google/ordermade-google-service-account.json'),
+        'spreadsheet_id' => env('GOOGLE_ORDER_SPREADSHEET_ID', '1HnGYC5vPhHhT64QT4xsgeb7Rh7Oqva3DCZXxMGkCH68'),
+        'sheet_gid' => env('GOOGLE_ORDER_SPREADSHEET_GID', 0),
+        'start_range' => env('GOOGLE_ORDER_SPREADSHEET_RANGE', 'B6:D20'),
+        'user_aliases' => is_array($aliases = json_decode(env('GOOGLE_ORDER_USER_ALIASES_JSON', '{}'), true)) ? $aliases : [],
+    ],
+
 ];

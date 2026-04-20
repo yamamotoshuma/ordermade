@@ -14,7 +14,7 @@
                 新規試合登録
             </a>
     </form>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
         @foreach ($games as $game)
             <div class="bg-white rounded-lg shadow-lg mb-8">
                 <div class="py-4 px-2">

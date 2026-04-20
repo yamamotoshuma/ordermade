@@ -6,7 +6,7 @@
         <x-message :message="session('message')" />
         <x-input-error class="mb-4" :messages="session('error')" />
     </x-slot>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
         <div class="bg-white rounded-lg shadow-lg mb-8">
             <div class="bg-white rounded-lg shadow-lg mb-8">
                 <div class="p-4">

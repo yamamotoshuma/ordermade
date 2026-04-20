@@ -15,6 +15,18 @@
                     試合詳細に戻る
                 </a>
             </p>
+            <div class="mb-4 flex flex-wrap gap-2">
+                <form method="POST" action="{{ route('order.importSheet', ['order' => $id]) }}">
+                    @csrf
+                    <button
+                        type="submit"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg"
+                        onclick="return confirm('スプレッドシートの内容で現在の打順を上書きします。よろしいですか？');"
+                    >
+                        スプレッドシート反映
+                    </button>
+                </form>
+            </div>
             <form method="POST" action="{{ route('order.store') }}" enctype="multipart/form-data">
                 @csrf
 
@@ -68,7 +80,7 @@
                                             <input class="border rounded-lg p-2 w-60" type="text" name="userName[]" value="">
                                         </td>
                                         <td class="px-2 py-2">
-                                            <input class="border rounded-lg p-2 w-16" type="number" name="ranking[]" value="">
+                                            <input class="border rounded-lg bg-slate-50 p-2 w-16" type="number" name="ranking[]" value="1" readonly>
                                         </td>
                                     </tr>
                                 @else
@@ -99,7 +111,7 @@
                                             <input class="border rounded-lg p-2 w-60" type="text" name="userName[]" value="{{ $order && $order->userName ? $order->userName : '' }}">
                                         </td>
                                         <td class="px-2 py-2">
-                                            <input class="border rounded-lg p-2 w-16" type="number" name="ranking[]" value="{{ $order && $order->ranking ? $order->ranking : '' }}">
+                                            <input class="border rounded-lg bg-slate-50 p-2 w-16" type="number" name="ranking[]" value="{{ $order && $order->ranking ? $order->ranking : 1 }}" readonly>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -156,6 +168,48 @@
 
         var cell4 = newRow.insertCell(4);
         cell4.className = 'px-2 py-2';
-        cell4.innerHTML = '<input class="border rounded-lg p-2 w-16" type="number" name="ranking[]" value="">';
+        cell4.innerHTML = '<input class="border rounded-lg bg-slate-50 p-2 w-16" type="number" name="ranking[]" value="1" readonly>';
+
+        bindRankingListeners(newRow.querySelector('input[name="battingOrder[]"]'));
+        syncRankings();
     });
+
+    function syncRankings() {
+        var rows = document.querySelectorAll('tbody tr');
+        var counters = {};
+
+        rows.forEach(function(row) {
+            var battingOrderInput = row.querySelector('input[name="battingOrder[]"]');
+            var rankingInput = row.querySelector('input[name="ranking[]"]');
+
+            if (!battingOrderInput || !rankingInput) {
+                return;
+            }
+
+            var battingOrder = battingOrderInput.value.trim();
+
+            if (battingOrder === '') {
+                rankingInput.value = 1;
+                return;
+            }
+
+            counters[battingOrder] = (counters[battingOrder] || 0) + 1;
+            rankingInput.value = counters[battingOrder];
+        });
+    }
+
+    function bindRankingListeners(input) {
+        if (!input) {
+            return;
+        }
+
+        input.addEventListener('input', syncRankings);
+        input.addEventListener('change', syncRankings);
+    }
+
+    document.querySelectorAll('input[name="battingOrder[]"]').forEach(function(input) {
+        bindRankingListeners(input);
+    });
+
+    syncRankings();
 </script>

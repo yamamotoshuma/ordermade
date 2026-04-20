@@ -68,6 +68,7 @@ Route::get('steal/{game}', [StealController::class, 'index'])->middleware(['auth
 Route::post('steal', [StealController::class, 'store'])->middleware(['auth', 'verified'])->name('steal.store');
 Route::delete('steal/delete', [StealController::class, 'destroy'])->middleware(['auth', 'verified'])->name('steal.destroy');
 
+Route::post('order/{order}/import-sheet', [BattingOrderController::class, 'importFromSpreadsheet'])->middleware(['auth','verified'])->name('order.importSheet');
 Route::resource('order', BattingOrderController::class)->middleware(['auth','verified']);
 
 Route::get('/contact', [ContactController::class,'index'])->name('contact');

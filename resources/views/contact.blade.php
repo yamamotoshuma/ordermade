@@ -5,7 +5,7 @@
         </h2>
         <x-message :message="session('success')" />
     </x-slot>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
     <div class="max-w-md mx-auto bg-white p-8 my-10 rounded-md shadow-md p-4">
         <form action="{{ route('contact.store') }}" method="POST">
             @csrf

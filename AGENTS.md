@@ -29,6 +29,13 @@
 - PWA assets from `~/www/kanri` were copied into local `public/`.
 - Hardcoded `/kanri/...` links in Blade templates were rewritten to follow the current request base path so the app can run locally at `/` and on the server under `/kanri`.
 - `public/build` is intentionally tracked because the Sakura server does not build frontend assets locally.
+- The batting create/edit screens now support a switchable `かんたん入力 / 通常入力` UI without changing the saved `resultId1/2/3` schema or the batting index HTML used by external scraping.
+- `DatabaseSeeder` now seeds server-aligned master data for `disbur_categories`, `positions`, and `batting_result_masters`, plus a local admin user from `INITIAL_ADMIN_*` env vars with defaults `admin@example.com` / `adminpassword`.
+- The batting create/edit screens now use the label `かんたん入力`, collapse the `試合・打者・イニング` block by default, and use a responsive SVG field map instead of the previous CSS-built infield shape.
+- The batting order edit screen now supports spreadsheet import from Google Sheets.
+  Service account JSON must live at `storage/app/private/google/ordermade-google-service-account.json` or the path set in `GOOGLE_SERVICE_ACCOUNT_PATH`, and must not be committed.
+  Import policy is intentionally tolerant: incomplete rows, unknown positions, and unmatched users do not fail the whole import.
+  Unknown users are imported as `userName`, duplicate batting orders are re-ranked top-to-bottom, and optional player-name aliases can be set with `GOOGLE_ORDER_USER_ALIASES_JSON`.
 
 ## Local Commands
 
@@ -62,3 +69,4 @@
 - Server analysis: [docs/server-analysis.md](/Users/yamamotoshuma/work/kusayakyu/ordermade/docs/server-analysis.md)
 - Local setup: [docs/local-setup.md](/Users/yamamotoshuma/work/kusayakyu/ordermade/docs/local-setup.md)
 - GitHub migration: [docs/github-migration.md](/Users/yamamotoshuma/work/kusayakyu/ordermade/docs/github-migration.md)
+- Batting input UI: [docs/batting-input-ui.md](/Users/yamamotoshuma/work/kusayakyu/ordermade/docs/batting-input-ui.md)

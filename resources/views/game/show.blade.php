@@ -5,7 +5,7 @@
         </h2>
         <x-message :message="session('message')" />
     </x-slot>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
         <p class="mt-4 mb-4 text-sm text-gray-600">
             <a href="{{ route('order.edit', $game->gameId) }}" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg">
                 打順登録

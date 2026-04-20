@@ -5,7 +5,7 @@
         </h2>
         <x-message :message="session('message')" />
     </x-slot>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
         <p class="mt-4 mb-4 text-sm text-gray-600">
             <a href="{{ route('game.show', $game->gameId) }}" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg">
                 試合詳細に戻る

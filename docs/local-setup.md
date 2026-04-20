@@ -30,12 +30,61 @@ Local `.env` is configured for Sail:
 1. Start Docker Desktop.
 2. Run:
    `./vendor/bin/sail up -d`
-3. Run migrations:
-   `./vendor/bin/sail artisan migrate`
+3. Run migrations and seed the default local data:
+   `./vendor/bin/sail artisan migrate --seed`
 4. Install frontend dependencies:
    `npm install`
 5. Start Vite:
    `npm run dev`
+
+## Default Local Seed Data
+
+`DatabaseSeeder` now creates:
+
+- a local admin user
+- `disbur_categories`
+- `positions`
+- `batting_result_masters`
+
+Default local admin credentials:
+
+- email: `admin@example.com`
+- password: `adminpassword`
+- role: `10` (management)
+
+You can override these with:
+
+- `INITIAL_ADMIN_NAME`
+- `INITIAL_ADMIN_EMAIL`
+- `INITIAL_ADMIN_PASSWORD`
+
+## Spreadsheet Import Setup
+
+Batting order registration can import rows from Google Sheets.
+
+- Service account JSON path:
+  `storage/app/private/google/ordermade-google-service-account.json`
+- Related env vars:
+  `GOOGLE_SERVICE_ACCOUNT_PATH`
+  `GOOGLE_ORDER_SPREADSHEET_ID`
+  `GOOGLE_ORDER_SPREADSHEET_GID`
+  `GOOGLE_ORDER_SPREADSHEET_RANGE`
+  `GOOGLE_ORDER_USER_ALIASES_JSON`
+
+Default import range is `B6:D20`, so rows for a second game lower in the sheet are ignored by default.
+
+`GOOGLE_ORDER_USER_ALIASES_JSON` is optional and accepts a JSON object like:
+
+`{"シューマ":"山本修馬","やましゅー":"山本修馬"}`
+
+Import behavior is intentionally tolerant:
+
+- blank or incomplete rows are ignored
+- unknown positions are skipped
+- unmatched users are stored as free-text `userName`
+- duplicate batting orders are ranked from top to bottom as `1, 2, 3...`
+
+Only configuration or Google API failures are treated as errors.
 
 ## Useful Commands
 
@@ -75,7 +124,7 @@ If you need production-like data locally, create a separate, explicit database e
 
 The local environment has already been verified with:
 
-- `./vendor/bin/sail artisan migrate --force`
+- `./vendor/bin/sail artisan migrate --seed`
 - `./vendor/bin/sail artisan test`
 - `npm install`
 - `npm run build`

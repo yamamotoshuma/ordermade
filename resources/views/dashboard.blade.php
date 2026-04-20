@@ -4,7 +4,7 @@
             O管理アプリ
         </h2>
     </x-slot>
-    <div class="container mt-8">
+    <div class="container mx-auto mt-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <button id="InstallBtn" style="display: none; width:100%;" class="text-center bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-lg">
