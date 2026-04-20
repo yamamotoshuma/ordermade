@@ -27,9 +27,6 @@
                     <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">
                         目安箱
                     </x-nav-link>
-                    <x-nav-link :href="route('disbur.score')" :active="request()->routeIs('disbur.score')">
-                        スコア表作成
-                    </x-nav-link>
                     @feature('attendances-management')
                     <!--管理者のみ-->
                     <x-nav-link :href="route('payment.create')" :active="request()->routeIs('payment.create')">
@@ -109,9 +106,6 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('contact')" :active="request()->routeIs('contact')">
                 目安箱
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('disbur.score')" :active="request()->routeIs('disbur.score')">
-                スコア表作成
             </x-responsive-nav-link>
             @feature('attendances-management')
             <!--管理者のみ-->

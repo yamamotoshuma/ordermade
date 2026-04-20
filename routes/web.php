@@ -43,17 +43,15 @@ Route::middleware('auth')->group(function () {
 Route::resource('payment', PayController::class)->middleware(['auth', 'verified']);
 Route::post('payment/bulkStore', [PayController::class,'bulkStore'])->middleware(['auth', 'verified','features:attendances-management'])->name('payment.bulkStore');
 Route::resource('dcategory', dCategoryController::class)->middleware(['auth', 'verified','features:attendances-management']);
-Route::resource('game', 'App\Http\Controllers\GameController'::class)->middleware(['auth', 'verified']);
 
 Route::get('disbur', [disburController::class, 'index'])->middleware(['auth', 'verified'])->name('disbur.index');
-Route::get('score', [disburController::class, 'score'])->middleware(['auth', 'verified'])->name('disbur.score');
 Route::get('disbur/create', [disburController::class, 'create'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.create');
 Route::get('disbur/getScode', [disburController::class, 'getScode'])->middleware(['auth', 'verified'])->name('disbur.getScode');
 Route::post('disbur', [disburController::class, 'store'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.store');
 Route::get('disbur/{disbur}', [disburController::class, 'show'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.show');
 Route::get('disbur/{disbur}/edit', [disburController::class, 'edit'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.edit');
 Route::patch('disbur/{disbur}', [disburController::class, 'update'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.update');
-Route::delete('disbur/{dibur}', [disburController::class, 'destroy'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.destroy');
+Route::delete('disbur/{disbur}', [disburController::class, 'destroy'])->middleware(['auth', 'verified','features:attendances-management'])->name('disbur.destroy');
 Route::resource('game', GameController::class)->middleware(['auth', 'verified']);
 Route::post('/game/bulk-update-insert', [GameController::class,'bulkUpdateOrInsert'])->middleware(['auth', 'verified'])->name('game.updateOrInsert');
 

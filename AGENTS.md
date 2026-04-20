@@ -30,6 +30,10 @@
 - Hardcoded `/kanri/...` links in Blade templates were rewritten to follow the current request base path so the app can run locally at `/` and on the server under `/kanri`.
 - `public/build` is intentionally tracked because the Sakura server does not build frontend assets locally.
 - The batting create/edit screens now support a switchable `かんたん入力 / 通常入力` UI without changing the saved `resultId1/2/3` schema or the batting index HTML used by external scraping.
+- The batting entry flow is now split so controller work stays thin:
+  `App\Services\BattingStatService` owns batting page query/mutation logic and `StoreBattingStatRequest` / `UpdateBattingStatRequest` own validation.
+- The other major business controllers were also thinned out in the same style.
+  Payments, disbursements, games, batting order import/save, pitching stats, steals, contact notifications, and batting summary aggregation now live in dedicated `App\Services\...Service` classes, with request validation in `App\Http\Requests`.
 - `DatabaseSeeder` now seeds server-aligned master data for `disbur_categories`, `positions`, and `batting_result_masters`, plus a local admin user from `INITIAL_ADMIN_*` env vars with defaults `admin@example.com` / `adminpassword`.
 - The batting create/edit screens now use the label `かんたん入力`, collapse the `試合・打者・イニング` block by default, and use a responsive SVG field map instead of the previous CSS-built infield shape.
 - The batting create screen now auto-suggests the next batter from the current batting order and advances the default inning when the current inning already has 3 or more outs recorded.
@@ -40,6 +44,7 @@
   Unknown users are imported as `userName`, duplicate batting orders are re-ranked top-to-bottom, and optional player-name aliases can be set with `GOOGLE_ORDER_USER_ALIASES_JSON`.
 - Manager-facing user maintenance now exists at `register/allshow`, with create, edit, and delete actions.
   Delete is safety-biased: users with related records are deactivated instead of being physically removed.
+- The standalone `スコア表作成` feature and its route/view were intentionally removed as unused functionality.
 
 ## Local Commands
 

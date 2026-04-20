@@ -2,125 +2,68 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\disbur;
-use App\Models\disburCategories;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Http\Requests\StoreDisburCategoryRequest;
+use App\Services\DisburCategoryService;
+use Illuminate\Http\RedirectResponse;
 use Throwable;
 
 class dCategoryController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-        $dc = disburCategories::all();
-        return view('disburCategories.index', compact('dc'));
+    public function __construct(
+        private readonly DisburCategoryService $disburCategoryService
+    ) {
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
+    public function index()
+    {
+        return view('disburCategories.index', $this->disburCategoryService->getIndexData());
+    }
+
     public function create()
     {
-        //
         return view('disburCategories.create');
     }
 
     /**
-     * Store a newly created resource in storage.
+     * カテゴリ重複判定を Service 側へ切り出す。
      */
-    public function store(Request $request)
+    public function store(StoreDisburCategoryRequest $request): RedirectResponse
     {
-        $inputs = $request->validate([
-            'Mcode' => 'required',
-            'Mname' => 'required',
-            'Scode' => 'required',
-            'Sname' => 'required'
-        ]);
-        
         try {
-            DB::beginTransaction();
+            $this->disburCategoryService->create($request->validated());
 
-            $existingPayment = disburCategories::where([
-                'Mcode' => $request->Mcode,
-                'Scode' => $request->Scode
-            ])->first();
-
-            if ($existingPayment) {
-                return redirect()->back()->withErrors(['duplicate' => '指定されたカテゴリコードは既に登録されています。']);
-            }
-
-            $dc = new disburCategories();
-            $dc->Mcode = $inputs['Mcode'];
-            $dc->Mname = $inputs['Mname'];
-            $dc->Scode = $inputs['Scode'];
-            $dc->Sname = $inputs['Sname'];
-            $dc->save();
-            DB::commit();
             return redirect()->route('dcategory.create')->with('message', 'カテゴリを作成しました');
         } catch (Throwable $e) {
-            DB::rollback();
-
-            // DB例外の場合
-            if ($e instanceof \Illuminate\Database\QueryException) {
-                redirect()->back()->withErrors(['duplicate' => '他の人が登録している可能性があります。']);
-            } else {
-                $errorMessage = $e->getMessage();
-                return view('error', compact('errorMessage'));
-            }
+            return redirect()->back()->withInput()->withErrors([
+                'duplicate' => $this->disburCategoryService->toUserMessage($e, 'カテゴリ作成中にエラーが発生しました。'),
+            ]);
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(disburCategories $disburCategories)
+    public function show($disburCategories)
     {
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(disburCategories $disburCategories)
+    public function edit($disburCategories)
     {
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, disburCategories $disburCategories)
+    public function update($request, $disburCategories)
     {
         //
-
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy($id)
+    public function destroy($id): RedirectResponse
     {
-        //
         try {
-            DB::beginTransaction();
-            $disburCategories = disburCategories::find($id);
-            $disburCategories->delete();
-            DB::commit();
+            $this->disburCategoryService->delete((int) $id);
+
             return redirect()->route('dcategory.index')->with('message', 'カテゴリを削除しました');
         } catch (Throwable $e) {
-            DB::rollback();
-
-            // DB例外の場合
-            if ($e instanceof \Illuminate\Database\QueryException) {
-                redirect()->back()->withErrors(['duplicate' => '他の人が登録している可能性があります。']);
-            } else {
-                $errorMessage = $e->getMessage();
-                return view('error', compact('errorMessage'));
-            }
+            return redirect()->back()->withErrors([
+                'duplicate' => $this->disburCategoryService->toUserMessage($e, 'カテゴリ削除中にエラーが発生しました。'),
+            ]);
         }
     }
 }

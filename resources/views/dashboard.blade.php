@@ -85,14 +85,7 @@
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="contact"><h1>目安箱</h1></a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
-                            <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
-                                <div class="p-6 text-gray-900 text-center">
-                                    <a href="score"><h1>スコア表作成</h1></a>
+                                    <a href="{{ route('contact') }}"><h1>目安箱</h1></a>
                                 </div>
                             </div>
                         </div>
