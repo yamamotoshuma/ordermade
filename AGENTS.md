@@ -46,6 +46,7 @@
 - Live public root: `~/www/kanri`
 - Deploy command from the source checkout:
   `./deploy/sakura/deploy.sh`
+- Codex skill installed for this flow: `ordermade-sakura-deploy`
 
 ## GitHub Migration Notes
 
