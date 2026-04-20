@@ -25,6 +25,15 @@ Local `.env` is configured for Sail:
 - database password: `password`
 - mail: Mailpit
 
+For smartphone checks over the local network, Vite must advertise a LAN-reachable host.
+Use:
+
+- `VITE_DEV_SERVER_HOST=0.0.0.0`
+- `VITE_HMR_HOST=<your Mac's LAN IP>`
+
+If CSS/JS disappears on another device, check `public/hot`.
+If it points to `localhost`, the phone will try to load assets from its own `localhost` and fail.
+
 ## Start The Environment
 
 1. Start Docker Desktop.
@@ -36,6 +45,8 @@ Local `.env` is configured for Sail:
    `npm install`
 5. Start Vite:
    `npm run dev`
+
+If you changed the Vite host settings, stop and restart `npm run dev` so `public/hot` is regenerated.
 
 ## Default Local Seed Data
 

@@ -135,7 +135,14 @@
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="register"><h1>新規ユーザー登録</h1></a>
+                                    <a href="{{ route('register') }}"><h1>新規ユーザー登録</h1></a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
+                            <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
+                                <div class="p-6 text-gray-900 text-center">
+                                    <a href="{{ route('register.allshow') }}"><h1>ユーザーマスタ</h1></a>
                                 </div>
                             </div>
                         </div>

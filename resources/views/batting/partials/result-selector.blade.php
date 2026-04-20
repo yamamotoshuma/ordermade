@@ -499,9 +499,12 @@
         .batting-choice-button:active,
         .batting-sub-button:active,
         .batting-rbi-button:active,
-        .batting-field-point:active,
         .batting-mode-button:active {
             transform: scale(0.98);
+        }
+
+        .batting-field-point:active {
+            transform: translate(-50%, -50%) scale(0.98);
         }
 
         .batting-field {
@@ -523,23 +526,30 @@
 
         .batting-field-point {
             position: absolute;
-            min-width: 2.85rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: clamp(3.25rem, 11vw, 4.4rem);
+            min-height: clamp(2.8rem, 8vw, 3.35rem);
             transform: translate(-50%, -50%);
             border: 1px solid rgba(255, 255, 255, 0.8);
             border-radius: 9999px;
             background: rgba(255, 255, 255, 0.92);
-            padding: 0.45rem 0.55rem;
-            font-size: 0.75rem;
+            padding: 0.55rem 0.7rem;
+            font-size: clamp(0.74rem, 2vw, 0.86rem);
             font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
             color: #166534;
             backdrop-filter: blur(6px);
         }
 
         @media (max-width: 640px) {
             .batting-field-point {
-                min-width: 2.5rem;
-                padding: 0.32rem 0.45rem;
-                font-size: 0.7rem;
+                min-width: clamp(3rem, 14vw, 3.7rem);
+                min-height: 2.7rem;
+                padding: 0.45rem 0.55rem;
+                font-size: 0.78rem;
             }
         }
     </style>

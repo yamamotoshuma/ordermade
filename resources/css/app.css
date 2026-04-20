@@ -3,3 +3,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.details-toggle-icon {
+    color: #64748b;
+    flex-shrink: 0;
+    transition: transform 0.18s ease;
+}
+
+details[open] > summary .details-toggle-icon {
+    transform: rotate(90deg);
+}

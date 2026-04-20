@@ -25,8 +25,12 @@ The `かんたん入力` tab updates the same fields, so the controller and data
 
 - The top `試合・打者・イニング` block is collapsible so in-game mobile use starts with a shorter screen.
 - When a registered batter is selected, the manual batter-name field is hidden.
+- The create screen now defaults the batter to the next batting-order entry after the latest saved plate appearance when no explicit batter is supplied.
+- The create screen now defaults the inning to the next inning when the latest inning already has 3 or more outs recorded.
+- The inning field shows the current out count for the selected inning and asks for confirmation before submitting into an inning that already has 3 or more outs.
 - `四球` is promoted into the frequently used result buttons.
 - The field map is rendered with a fixed SVG viewBox so the infield dirt shape stays stable across phone sizes.
+- Field-direction buttons were enlarged with responsive touch targets so outfield taps are easier on smartphones.
 
 ## Special Cases
 

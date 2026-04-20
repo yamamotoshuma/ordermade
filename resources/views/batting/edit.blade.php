@@ -23,13 +23,16 @@
 
                 <details class="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" @if($metaPanelOpen) open @endif>
                     <summary class="cursor-pointer list-none">
-                        <div>
+                        <div class="flex items-center justify-between gap-3">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">試合・打者・イニング</p>
                                 <p class="mt-1 text-sm text-slate-700">
                                     試合 {{ $batting->game->gameName }} / 打者 {{ $batterLabel }} / イニング {{ $batting->inning }}
                                 </p>
                             </div>
+                            <svg class="details-toggle-icon h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                <path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
                         </div>
                     </summary>
 

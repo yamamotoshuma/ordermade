@@ -50,6 +50,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('register/{id}', [RegisteredUserController::class, 'update'])->middleware(['features:attendances-management'])->name('register.update');
 
+    Route::delete('register/{id}', [RegisteredUserController::class, 'destroy'])->middleware(['features:attendances-management'])->name('register.destroy');
+
     Route::get('verify-email', EmailVerificationPromptController::class)
                 ->name('verification.notice');
 

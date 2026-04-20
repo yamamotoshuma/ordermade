@@ -9,9 +9,9 @@ use App\Models\Point;
 use App\Models\BattingOrder;
 use App\Models\User;
 use App\Models\BattingResultMaster;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Collection;
 
 class BattingEditController extends Controller
 {
@@ -20,7 +20,8 @@ class BattingEditController extends Controller
         $points = Point::where('gameId', $game->gameId)->get();
         $orders = BattingOrder::where('gameId', $game->gameId)
             ->with('position', 'user')
-            ->orderBy('battingOrder', 'asc') // 打順の昇順に並び替え
+            ->orderBy('battingOrder', 'asc')
+            ->orderBy('ranking', 'asc')
             ->get();
         $battingStats = BattingStats::where('gameId', $game->gameId)
             ->with('user','result1','result2','result3','result4','result5')
@@ -31,26 +32,31 @@ class BattingEditController extends Controller
         return view('batting.index', compact('game','points','orders','battingStats', 'statsId')); // statsIdをviewに渡す
     }
 
-    public function create(game $game){
-        // ゲームに関連するオーダーを取得
-        $orders = BattingOrder::where('gameId', $game->gameId)->orderBy('battingOrder')->get();
+    public function create(game $game, Request $request){
+        $orders = BattingOrder::where('gameId', $game->gameId)
+            ->with('user')
+            ->orderBy('battingOrder')
+            ->orderBy('ranking')
+            ->get();
 
-        // オーダーに存在するユーザーのIDを取得
-        $userIdsInOrder = $orders->pluck('userId');
+        $userIdsInOrder = $orders->pluck('userId')->filter()->unique()->values();
 
-        // ユーザーの中からオーダーに存在するユーザーのみを取得
         $users = User::where('active_flg', 1)
                     ->whereIn('id', $userIdsInOrder)
                     ->get();
 
         $results = BattingResultMaster::all();
 
-        $maxInning = BattingStats::where('gameId', $game->gameId)->max('inning');
-        if ($maxInning === null || $maxInning === 0) {
-            $maxInning = 1;
-        }
+        $battingStats = BattingStats::where('gameId', $game->gameId)
+            ->with('result1')
+            ->orderBy('inning')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
 
-        return view("batting.create", compact("game", "users", "results","orders","maxInning"));
+        $createDefaults = $this->buildCreateDefaults($orders, $users, $battingStats);
+
+        return view("batting.create", compact("game", "users", "results", "orders", "createDefaults"));
     }
 
     public function store(game $game,Request $request){
@@ -114,7 +120,7 @@ class BattingEditController extends Controller
             }
             return redirect()->route('batting.create',['game' => $game])->with('message','打撃成績を登録しました');
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // その他の例外が発生した場合の処理
             DB::rollBack();
             // エラーメッセージやログ出力などの適切な処理を追加
@@ -170,7 +176,7 @@ class BattingEditController extends Controller
             DB::commit();
             Log::info("打撃更新完了");
             return redirect()->route('batting.edit', ['batting' => $batting])->with('message', '打撃成績を更新しました');
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // エラーハンドリング
 
             // エラーメッセージを設定してリダイレクト
@@ -195,7 +201,7 @@ class BattingEditController extends Controller
             DB::commit();
             Log::info("打撃削除完了");
             return redirect()->route('batting.index', ['game' => $game])->with('message', '打撃成績を削除しました');
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // エラーハンドリング
 
             // エラーメッセージを設定してリダイレクト
@@ -204,5 +210,96 @@ class BattingEditController extends Controller
             return redirect()->back()->with('error', '打撃成績の削除中にエラーが発生しました。');
         }
 
+    }
+
+    private function buildCreateDefaults(Collection $orders, Collection $users, Collection $battingStats): array
+    {
+        $inningOutCounts = $this->buildInningOutCounts($battingStats);
+        $defaultInning = 1;
+
+        if ($battingStats->isNotEmpty()) {
+            $latestStat = $battingStats->last();
+            $latestInning = (int) $latestStat->inning;
+            $defaultInning = $latestInning + (($inningOutCounts[$latestInning] ?? 0) >= 3 ? 1 : 0);
+        }
+
+        $selectableOrders = $orders->filter(function ($order) use ($users) {
+            if ($order->userId) {
+                return $users->contains('id', $order->userId);
+            }
+
+            return filled($order->userName);
+        })->values();
+
+        $nextOrder = $this->resolveNextOrder($selectableOrders, $battingStats);
+
+        return [
+            'defaultUserId' => $nextOrder?->userId ? (string) $nextOrder->userId : '',
+            'defaultUserName' => $nextOrder && ! $nextOrder->userId ? (string) $nextOrder->userName : '',
+            'defaultInning' => $defaultInning,
+            'inningOutCounts' => $inningOutCounts,
+        ];
+    }
+
+    private function resolveNextOrder(Collection $orders, Collection $battingStats): ?BattingOrder
+    {
+        if ($orders->isEmpty()) {
+            return null;
+        }
+
+        if ($battingStats->isEmpty()) {
+            return $orders->first();
+        }
+
+        $orderKeys = $orders->map(function ($order) {
+            return $this->makeOrderKey($order->userId, $order->userName);
+        })->all();
+
+        foreach ($battingStats->reverse() as $stat) {
+            $matchedIndex = array_search($this->makeOrderKey($stat->userId, $stat->userName), $orderKeys, true);
+
+            if ($matchedIndex === false) {
+                continue;
+            }
+
+            $nextIndex = ($matchedIndex + 1) % $orders->count();
+
+            return $orders->get($nextIndex);
+        }
+
+        return $orders->first();
+    }
+
+    private function buildInningOutCounts(Collection $battingStats): array
+    {
+        $outCounts = [];
+
+        foreach ($battingStats as $stat) {
+            $inning = (int) $stat->inning;
+            $outCounts[$inning] = ($outCounts[$inning] ?? 0) + $this->resultOutCount((string) optional($stat->result1)->name);
+        }
+
+        ksort($outCounts);
+
+        return $outCounts;
+    }
+
+    private function resultOutCount(string $resultName): int
+    {
+        return match (trim($resultName)) {
+            'ゴロ', 'フライ', '三振', 'ライナー', '犠打', '犠飛' => 1,
+            '併殺' => 2,
+            '三重殺' => 3,
+            default => 0,
+        };
+    }
+
+    private function makeOrderKey(?int $userId, ?string $userName): string
+    {
+        if ($userId) {
+            return 'id:' . $userId;
+        }
+
+        return 'name:' . trim((string) $userName);
     }
 }

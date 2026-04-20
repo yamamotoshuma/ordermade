@@ -15,25 +15,50 @@
                     試合詳細に戻る
                 </a>
             </p>
-            <form method="POST" action="{{ route('batting.store',$game) }}" enctype="multipart/form-data" onsubmit="showLoading()">
+            @php
+                $defaultUserId = (string) ($createDefaults['defaultUserId'] ?? '');
+                $defaultUserName = (string) ($createDefaults['defaultUserName'] ?? '');
+                $defaultInning = (int) ($createDefaults['defaultInning'] ?? 1);
+                $initialUserId = (string) old('userId', request('userId', $defaultUserId));
+                $initialUserName = (string) old('userName', request('userName', $defaultUserName));
+                $initialInning = (string) old('inning', request('inning', $defaultInning));
+                $createConfig = [
+                    'inningOutCounts' => $createDefaults['inningOutCounts'] ?? [],
+                    'suggestedInning' => $defaultInning,
+                ];
+                $initialBatterLabel = '未選択';
+
+                if ($initialUserId !== '') {
+                    $initialOrder = $orders->firstWhere('userId', (int) $initialUserId);
+                    $initialUser = $users->firstWhere('id', (int) $initialUserId);
+
+                    if ($initialOrder && $initialUser) {
+                        $initialBatterLabel = $initialOrder->battingOrder . '番' . $initialUser->name;
+                    }
+                } elseif ($initialUserName !== '') {
+                    $initialBatterLabel = '未登録 ' . $initialUserName;
+                }
+
+                $metaPanelOpen = $errors->hasAny(['userId', 'userName', 'inning'])
+                    || (blank($initialUserId) && blank($initialUserName));
+            @endphp
+
+            <form id="batting-create-form" method="POST" action="{{ route('batting.store',$game) }}" enctype="multipart/form-data" data-create-config='@json($createConfig)'>
                 @csrf
                 <input type="hidden" name="fromEdit" value="{{ request('fromEdit', false) }}">
-                @php
-                    $initialUserId = old('userId', request('userId'));
-                    $initialUserName = old('userName');
-                    $metaPanelOpen = $errors->hasAny(['userId', 'userName', 'inning'])
-                        || (blank($initialUserId) && blank($initialUserName));
-                @endphp
 
                 <details id="batting-meta-panel" class="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" @if($metaPanelOpen) open @endif>
                     <summary class="cursor-pointer list-none">
-                        <div>
+                        <div class="flex items-center justify-between gap-3">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">試合・打者・イニング</p>
                                 <p data-role="batting-meta-summary" class="mt-1 text-sm text-slate-700">
-                                    試合 {{ $game->gameName }} / 打者 未選択 / イニング {{ request('inning', $maxInning) }}
+                                    試合 {{ $game->gameName }} / 打者 {{ $initialBatterLabel }} / イニング {{ $initialInning }}
                                 </p>
                             </div>
+                            <svg class="details-toggle-icon h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                <path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
                         </div>
                     </summary>
 
@@ -53,7 +78,7 @@
                                         $user = $users->where('id', $order->userId)->first();
                                     @endphp
                                     @if($user)
-                                        <option value="{{$user->id}}"{{ $user->id === old('userId') ? ' selected' : '' }}>
+                                        <option value="{{$user->id}}"{{ (string) $user->id === $initialUserId ? ' selected' : '' }}>
                                             {{$order->battingOrder}}番{{$user->name}}
                                         </option>
                                     @endif
@@ -63,12 +88,13 @@
 
                         <div id="batting-manual-user-wrapper" class="w-full flex flex-col">
                             <label for="userName" class="font-semibold leading-none">打者名<span class="text-red-500"> ※登録外の打者のみ</span></label>
-                            <input type="text" name="userName" class="mt-2 w-auto rounded-md border border-gray-300 py-2" id="userName" value="{{ old('userName') }}">
+                            <input type="text" name="userName" class="mt-2 w-auto rounded-md border border-gray-300 py-2" id="userName" value="{{ $initialUserName }}">
                         </div>
 
                         <div class="w-full flex flex-col">
                             <label for="inning" class="font-semibold leading-none">イニング</label>
-                            <input type="number" name="inning" class="mt-2 w-auto rounded-md border border-gray-300 py-2" id="inning" value="{{ request('inning', $maxInning) }}" required>
+                            <input type="number" name="inning" class="mt-2 w-auto rounded-md border border-gray-300 py-2" id="inning" value="{{ $initialInning }}" required>
+                            <p data-role="inning-status" class="mt-2 text-sm text-slate-500"></p>
                         </div>
                     </div>
                 </details>
@@ -93,6 +119,10 @@
         clearMessages();
     }
 
+    function hideLoading() {
+        document.getElementById('loading').style.display = 'none';
+    }
+
     function clearMessages() {
         const errors = document.querySelectorAll('.x-input-error');
         errors.forEach(error => error.innerHTML = '');
@@ -103,20 +133,19 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('batting-create-form');
         const userIdSelect = document.getElementById('userId');
         const userNameInput = document.getElementById('userName');
         const result1Select = document.getElementById('resultId1');
         const result2Select = document.getElementById('resultId2');
         const result3Select = document.getElementById('resultId3');
         const inningInput = document.getElementById('inning');
+        const inningStatus = document.querySelector('[data-role="inning-status"]');
         const gameNameLabel = document.getElementById('gameName');
         const metaSummary = document.querySelector('[data-role="batting-meta-summary"]');
         const manualUserWrapper = document.getElementById('batting-manual-user-wrapper');
         const metaPanel = document.getElementById('batting-meta-panel');
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const userIdFromQuery = urlParams.get('userId');
-        const inningFromQuery = urlParams.get('inning');
+        const createConfig = form ? JSON.parse(form.dataset.createConfig || '{}') : {};
 
         const updateMetaSummary = function() {
             if (!metaSummary) {
@@ -145,7 +174,6 @@
 
             if (hasSelectedUser && userNameInput.value !== '') {
                 userNameInput.value = '';
-                localStorage.setItem('batting.userName', '');
             }
         };
 
@@ -159,14 +187,6 @@
             }
         };
 
-        if (userIdSelect && !userIdSelect.value) {
-            userIdSelect.value = userIdFromQuery || localStorage.getItem('batting.userId') || '';
-        }
-
-        if (userNameInput && !userNameInput.value) {
-            userNameInput.value = localStorage.getItem('batting.userName') || '';
-        }
-
         if (result1Select && !result1Select.value) {
             result1Select.value = localStorage.getItem('batting.result1') || '';
         }
@@ -179,13 +199,54 @@
             result3Select.value = localStorage.getItem('batting.result3') || '';
         }
 
-        if (inningInput && inningFromQuery) {
-            inningInput.value = inningFromQuery;
-        }
+        const getCurrentOutCount = function() {
+            if (!inningInput || !inningInput.value) {
+                return 0;
+            }
+
+            const inningOutCounts = createConfig.inningOutCounts || {};
+
+            return Number(inningOutCounts[inningInput.value] || 0);
+        };
+
+        const updateInningStatus = function() {
+            if (!inningStatus || !inningInput) {
+                return;
+            }
+
+            const outCount = getCurrentOutCount();
+            inningStatus.className = 'mt-2 text-sm';
+
+            if (!inningInput.value) {
+                inningStatus.textContent = '';
+                inningStatus.classList.add('text-slate-500');
+                return;
+            }
+
+            if (outCount >= 3) {
+                inningStatus.textContent = inningInput.value + '回はすでに' + outCount + 'アウト入力されています。続けて登録する場合は確認が出ます。';
+                inningStatus.classList.add('font-semibold', 'text-amber-700');
+                return;
+            }
+
+            if (outCount > 0) {
+                inningStatus.textContent = inningInput.value + '回は現在 ' + outCount + ' アウトです。';
+                inningStatus.classList.add('text-slate-600');
+                return;
+            }
+
+            if (String(createConfig.suggestedInning || '') === String(inningInput.value)) {
+                inningStatus.textContent = inningInput.value + '回を初期表示しています。';
+                inningStatus.classList.add('text-slate-500');
+                return;
+            }
+
+            inningStatus.textContent = '';
+            inningStatus.classList.add('text-slate-500');
+        };
 
         if (userIdSelect) {
             userIdSelect.addEventListener('change', function() {
-                localStorage.setItem('batting.userId', userIdSelect.value);
                 clearMessages();
                 toggleManualUserInput();
                 updateMetaSummary();
@@ -197,9 +258,7 @@
             userNameInput.addEventListener('input', function() {
                 if (userNameInput.value.trim() !== '' && userIdSelect) {
                     userIdSelect.value = '';
-                    localStorage.setItem('batting.userId', '');
                 }
-                localStorage.setItem('batting.userName', userNameInput.value);
                 toggleManualUserInput();
                 updateMetaSummary();
                 syncMetaPanelState();
@@ -227,11 +286,34 @@
         if (inningInput) {
             inningInput.addEventListener('input', updateMetaSummary);
             inningInput.addEventListener('change', updateMetaSummary);
+            inningInput.addEventListener('input', updateInningStatus);
+            inningInput.addEventListener('change', updateInningStatus);
+        }
+
+        if (form) {
+            form.addEventListener('submit', function(event) {
+                const outCount = getCurrentOutCount();
+
+                if (outCount >= 3) {
+                    const confirmed = window.confirm(
+                        inningInput.value + '回にはすでに' + outCount + 'アウト入力されています。本当に登録しますか？'
+                    );
+
+                    if (!confirmed) {
+                        hideLoading();
+                        event.preventDefault();
+                        return;
+                    }
+                }
+
+                showLoading();
+            });
         }
 
         toggleManualUserInput();
         updateMetaSummary();
         syncMetaPanelState();
+        updateInningStatus();
 
         [result1Select, result2Select, result3Select].forEach(function(select) {
             if (select) {
