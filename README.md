@@ -9,6 +9,7 @@ Laravel-based web application for the `ordermade.sakura.ne.jp/kanri` management 
 - Tailwind + Vite frontend assets
 - Laravel Sail-based local development setup
 - PWA assets used by the `/kanri` deployment
+- committed `public/build` assets for Sakura deployment
 
 ## Main Functional Areas
 

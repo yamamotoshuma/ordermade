@@ -46,6 +46,8 @@ Use three distinct concerns on the server:
 
 The repository now includes `deploy/sakura/deploy.sh` to sync from `~/ordermade-repo` into the two live locations.
 
+Because the server does not build frontend assets, keep `public/build` committed as part of the deployable tree unless the server build strategy changes.
+
 ## Server Cleanup Recommendation
 
 Before switching to the new Git flow:

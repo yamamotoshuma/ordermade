@@ -98,3 +98,5 @@ The deployed `~/www/kanri` directory differed from `~/ordermade/public` in sever
 - different `sw.js`
 
 For local development, the missing public assets were copied into `public/`, while path handling was normalized so the app works locally at `/`.
+
+Because the Sakura server does not have Node.js, the repository now tracks `public/build` so the deployed app can serve Vite-built assets without rebuilding on the server.

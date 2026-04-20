@@ -28,6 +28,7 @@
 - Local `.env` was sanitized for Docker/Sail and no longer points at the Sakura MySQL or SMTP endpoints.
 - PWA assets from `~/www/kanri` were copied into local `public/`.
 - Hardcoded `/kanri/...` links in Blade templates were rewritten to follow the current request base path so the app can run locally at `/` and on the server under `/kanri`.
+- `public/build` is intentionally tracked because the Sakura server does not build frontend assets locally.
 
 ## Local Commands
 
