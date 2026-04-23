@@ -28,9 +28,12 @@ class BattingEditController extends Controller
         ));
     }
 
-    public function create(Game $game)
+    public function create(Request $request, Game $game)
     {
-        return view('batting.create', $this->battingStatService->getCreateData($game));
+        return view('batting.create', $this->battingStatService->getCreateData(
+            $game,
+            $request->session()->get('last_batting_stat_id')
+        ));
     }
 
     public function store(Game $game, StoreBattingStatRequest $request): RedirectResponse
@@ -48,7 +51,7 @@ class BattingEditController extends Controller
 
             return redirect()
                 ->route('batting.create', ['game' => $game])
-                ->with('message', $message);
+                ->with('last_batting_stat_id', $battingStat->id);
         } catch (BattingStatConflictException $e) {
             return redirect()
                 ->route('batting.create', ['game' => $game])
@@ -83,6 +86,12 @@ class BattingEditController extends Controller
             $updatedBatting = $this->battingStatService->update($batting, $request->validated());
             Log::info('打撃更新完了');
 
+            if ($request->input('returnTo') === 'create') {
+                return redirect()
+                    ->route('batting.create', ['game' => $updatedBatting->gameId])
+                    ->with('last_batting_stat_id', $updatedBatting->id);
+            }
+
             return redirect()
                 ->route('batting.edit', ['batting' => $updatedBatting])
                 ->with('message', '打撃成績を更新しました');
@@ -93,11 +102,17 @@ class BattingEditController extends Controller
         }
     }
 
-    public function destroy(BattingStats $batting): RedirectResponse
+    public function destroy(Request $request, BattingStats $batting): RedirectResponse
     {
         try {
             $game = $this->battingStatService->delete($batting);
             Log::info('打撃削除完了');
+
+            if ($request->input('returnTo') === 'create') {
+                return redirect()
+                    ->route('batting.create', ['game' => $game])
+                    ->with('message', '直前の打撃成績を取り消しました');
+            }
 
             return redirect()
                 ->route('batting.index', ['game' => $game])

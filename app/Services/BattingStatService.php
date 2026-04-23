@@ -38,7 +38,7 @@ class BattingStatService
     /**
      * 打撃成績登録画面で使う候補値と初期値を返す。
      */
-    public function getCreateData(Game $game): array
+    public function getCreateData(Game $game, mixed $lastBattingStatId = null): array
     {
         $orders = BattingOrder::where('gameId', $game->gameId)
             ->with('user')
@@ -63,6 +63,7 @@ class BattingStatService
             'results' => BattingResultMaster::all(),
             'orders' => $orders,
             'createDefaults' => $this->buildCreateDefaults($orders, $users, $battingStats),
+            'lastBattingStat' => $this->findLastBattingStat($game, $lastBattingStatId),
         ];
     }
 
@@ -71,11 +72,26 @@ class BattingStatService
      */
     public function getEditData(BattingStats $batting): array
     {
-        $batting->loadMissing('game', 'user');
+        $batting->loadMissing('game', 'user', 'result1', 'result2', 'result3');
+        $orders = BattingOrder::where('gameId', $batting->gameId)
+            ->with('user')
+            ->orderBy('battingOrder')
+            ->orderBy('ranking')
+            ->get();
+
+        $userIds = $orders->pluck('userId')
+            ->filter()
+            ->when($batting->userId, fn ($ids) => $ids->push($batting->userId))
+            ->unique()
+            ->values();
 
         return [
             'batting' => $batting,
             'results' => BattingResultMaster::all(),
+            'orders' => $orders,
+            'users' => User::where('active_flg', 1)
+                ->whereIn('id', $userIds)
+                ->get(),
         ];
     }
 
@@ -108,6 +124,8 @@ class BattingStatService
      */
     public function update(BattingStats $batting, array $payload): BattingStats
     {
+        $this->ensureExclusiveBatter($payload);
+
         return DB::transaction(function () use ($batting, $payload) {
             return $this->saveFromPayload($batting, (int) $batting->gameId, $payload);
         });
@@ -171,6 +189,21 @@ class BattingStatService
         $battingStat->save();
 
         return $battingStat;
+    }
+
+    /**
+     * 登録完了直後だけ表示する直前入力カード用の成績を取得する。
+     */
+    private function findLastBattingStat(Game $game, mixed $lastBattingStatId): ?BattingStats
+    {
+        if (! is_numeric($lastBattingStatId)) {
+            return null;
+        }
+
+        return BattingStats::whereKey((int) $lastBattingStatId)
+            ->where('gameId', $game->gameId)
+            ->with('user', 'result1', 'result2', 'result3')
+            ->first();
     }
 
     /**

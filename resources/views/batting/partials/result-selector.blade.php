@@ -13,11 +13,45 @@
         ->filter(fn ($result) => (int) $result->type === 5)
         ->values();
 
-    $featuredResultNames = ['安打', '四球', 'ゴロ', 'フライ', '三振', '二塁打', '三塁打', '本塁打'];
-    $featuredResults = collect($featuredResultNames)
-        ->map(fn ($name) => $resultOptions->firstWhere('name', $name))
-        ->filter()
+    $resultGroups = [
+        [
+            'key' => 'onbase',
+            'label' => '出塁',
+            'class' => 'batting-result-onbase',
+            'names' => ['安打', '四球', '死球', 'エラー', 'FC'],
+        ],
+        [
+            'key' => 'extra',
+            'label' => '長打',
+            'class' => 'batting-result-extra',
+            'names' => ['二塁打', '三塁打', '本塁打'],
+        ],
+        [
+            'key' => 'out',
+            'label' => 'アウト',
+            'class' => 'batting-result-out',
+            'names' => ['ゴロ', 'フライ', '三振', 'ライナー', '犠打', '犠飛', '併殺', '三重殺', '振逃'],
+        ],
+    ];
+    $featuredResultNames = collect($resultGroups)->pluck('names')->flatten()->all();
+    $resultGroups = collect($resultGroups)
+        ->map(function ($group) use ($resultOptions) {
+            $group['results'] = collect($group['names'])
+                ->map(fn ($name) => $resultOptions->firstWhere('name', $name))
+                ->filter()
+                ->values();
+
+            return $group;
+        })
+        ->filter(fn ($group) => $group['results']->isNotEmpty())
         ->values();
+    $defaultResultGroupKey = optional($resultGroups->first())['key'] ?? '';
+
+    if ($selectedResultId1 !== '') {
+        $selectedResultGroup = $resultGroups->first(fn ($group) => $group['results']->contains(fn ($result) => (string) $result->id === $selectedResultId1));
+        $defaultResultGroupKey = $selectedResultGroup['key'] ?? $defaultResultGroupKey;
+    }
+
     $otherResults = $resultOptions
         ->reject(fn ($result) => in_array($result->name, $featuredResultNames, true))
         ->values();
@@ -61,12 +95,11 @@
     ];
 @endphp
 
-<div id="batting-result-selector" data-config='@json($visualConfig)' class="mt-8">
+<div id="batting-result-selector" data-config='@json($visualConfig)' data-default-result-group="{{ $defaultResultGroupKey }}" class="mt-8">
     <div class="rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm sm:p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <label class="font-semibold leading-none text-gray-900">入力方式</label>
-                <p class="mt-2 text-xs text-gray-500">試合中はかんたん入力、細かい修正は通常入力に切り替えできます。</p>
             </div>
             <div class="inline-flex rounded-full bg-gray-100 p-1">
                 <button type="button" data-role="mode-toggle" data-mode="visual" class="batting-mode-button rounded-full px-4 py-2 text-sm font-semibold text-gray-700">
@@ -80,55 +113,87 @@
 
         <div data-panel="visual" class="mt-6">
             <section>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-base font-semibold text-gray-900">結果</h3>
+                <h3 class="text-base font-semibold text-gray-900">結果</h3>
+
+                <div data-role="result-picked" class="mt-3 hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <p data-role="result-picked-text" class="text-lg font-black text-emerald-900">未選択</p>
+                        <button type="button" data-role="change-result" class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-emerald-800 shadow-sm">
+                            変更
+                        </button>
                     </div>
                 </div>
-                <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    @foreach($featuredResults as $result)
-                        <button
-                            type="button"
-                            data-role="result-button"
-                            data-value="{{ $result->id }}"
-                            class="batting-choice-button w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm font-semibold text-gray-700"
-                        >
-                            {{ $result->name }}
-                        </button>
-                    @endforeach
-                </div>
 
-                @if($otherResults->isNotEmpty())
-                    <details class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                        <summary class="cursor-pointer text-sm font-semibold text-gray-700">その他の結果</summary>
-                        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            @foreach($otherResults as $result)
-                                <button
-                                    type="button"
-                                    data-role="result-button"
-                                    data-value="{{ $result->id }}"
-                                    class="batting-choice-button w-full rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-gray-700"
-                                >
-                                    {{ $result->name }}
-                                </button>
-                            @endforeach
+                <div data-role="result-chooser">
+                    <div class="mt-3 grid grid-cols-3 gap-2">
+                        @foreach($resultGroups as $group)
+                            <button
+                                type="button"
+                                data-role="result-group-tab"
+                                data-result-group="{{ $group['key'] }}"
+                                class="batting-result-group-tab {{ $group['class'] }} rounded-2xl px-3 py-3 text-sm font-black"
+                            >
+                                {{ $group['label'] }}
+                            </button>
+                        @endforeach
+                    </div>
+
+                    @foreach($resultGroups as $group)
+                        <div data-role="result-group-panel" data-result-group="{{ $group['key'] }}" class="mt-3{{ $group['key'] === $defaultResultGroupKey ? '' : ' hidden' }}">
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                @foreach($group['results'] as $result)
+                                    <button
+                                        type="button"
+                                        data-role="result-button"
+                                        data-value="{{ $result->id }}"
+                                        class="batting-choice-button {{ $group['class'] }} w-full rounded-2xl px-4 py-4 text-sm font-black"
+                                    >
+                                        {{ $result->name }}
+                                    </button>
+                                @endforeach
+                            </div>
                         </div>
-                    </details>
-                @endif
+                    @endforeach
+
+                    @if($otherResults->isNotEmpty())
+                        <details class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">その他</summary>
+                            <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                @foreach($otherResults as $result)
+                                    <button
+                                        type="button"
+                                        data-role="result-button"
+                                        data-value="{{ $result->id }}"
+                                        class="batting-choice-button w-full rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-gray-700"
+                                    >
+                                        {{ $result->name }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endif
+                </div>
             </section>
 
-            <section data-section="direction-prompt" class="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4">
-                <h3 class="text-base font-semibold text-gray-900">打球方向</h3>
-                <p class="mt-1 text-sm text-gray-600">結果を選ぶと、ここに打球方向の入力を表示します。</p>
+            <section data-section="direction-prompt" class="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4">
+                <h3 class="text-base font-semibold text-gray-900">次: 結果</h3>
             </section>
 
-            <section data-section="field-direction" class="mt-6 hidden">
+            <section data-role="direction-picked" class="mt-4 hidden rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+                <div class="flex items-center justify-between gap-3">
+                    <p data-role="direction-picked-text" class="text-lg font-black text-sky-900">未選択</p>
+                    <button type="button" data-role="change-direction" class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-sky-800 shadow-sm">
+                        変更
+                    </button>
+                </div>
+            </section>
+
+            <section data-section="field-direction" class="mt-4 hidden">
                 <div>
                     <h3 class="text-base font-semibold text-gray-900">打球方向</h3>
-                    <p class="mt-1 text-xs text-gray-500">球場図をタップして選択します。</p>
                 </div>
 
-                <div class="batting-field mt-4">
+                <div class="batting-field mt-3">
                     <svg
                         class="batting-field-svg"
                         viewBox="0 0 400 360"
@@ -178,10 +243,9 @@
                 <p data-role="direction-summary" class="mt-3 text-center text-sm font-semibold text-emerald-700">打球方向を選択してください</p>
             </section>
 
-            <section data-section="strike-direction" class="mt-6 hidden">
+            <section data-section="strike-direction" class="mt-4 hidden">
                 <div>
                     <h3 class="text-base font-semibold text-gray-900">三振種別</h3>
-                    <p class="mt-1 text-xs text-gray-500">三振時は空振か見逃を選択します。</p>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-3">
                     @foreach($strikeDirections as $direction)
@@ -197,15 +261,14 @@
                 </div>
             </section>
 
-            <section data-section="auto-direction" class="mt-6 hidden rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+            <section data-section="auto-direction" class="mt-4 hidden rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
                 <h3 class="text-base font-semibold text-amber-900">打球方向</h3>
                 <p data-role="auto-direction-message" class="mt-1 text-sm text-amber-800"></p>
             </section>
 
-            <section class="mt-6">
+            <section class="mt-4">
                 <div>
                     <h3 class="text-base font-semibold text-gray-900">打点</h3>
-                    <p class="mt-1 text-xs text-gray-500">タップで選択します。</p>
                 </div>
                 <div class="mt-4 grid grid-cols-5 gap-2">
                     @foreach($rbiOptions as $result)
@@ -221,17 +284,12 @@
                 </div>
             </section>
 
-            <section class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <h3 class="text-sm font-semibold text-slate-900">現在の入力</h3>
-                <p data-role="summary" class="mt-2 text-sm text-slate-700">未選択</p>
-            </section>
+            <p data-role="summary" class="hidden">未選択</p>
         </div>
 
         <div data-panel="classic" class="mt-6 hidden">
             <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <p class="text-xs text-gray-500">従来のフォームをそのまま残しています。視覚入力と値は同期します。</p>
-
-                <div class="md:flex items-center mt-6">
+                <div class="md:flex items-center">
                     <div class="w-full flex flex-col">
                         <label for="resultId1" class="font-semibold leading-none mt-1">結果</label>
                         <select name="resultId1" class="w-auto py-2 placeholder-gray-300 border border-gray-300 rounded-md" id="resultId1" required>
@@ -296,13 +354,24 @@
             const autoMessage = root.querySelector('[data-role="auto-direction-message"]');
             const directionSummary = root.querySelector('[data-role="direction-summary"]');
             const summary = root.querySelector('[data-role="summary"]');
+            const resultChooser = root.querySelector('[data-role="result-chooser"]');
+            const resultPicked = root.querySelector('[data-role="result-picked"]');
+            const resultPickedText = root.querySelector('[data-role="result-picked-text"]');
+            const changeResultButton = root.querySelector('[data-role="change-result"]');
+            const directionPicked = root.querySelector('[data-role="direction-picked"]');
+            const directionPickedText = root.querySelector('[data-role="direction-picked-text"]');
+            const changeDirectionButton = root.querySelector('[data-role="change-direction"]');
             const resultSelect = document.getElementById('resultId1');
             const directionSelect = document.getElementById('resultId2');
             const rbiSelect = document.getElementById('resultId3');
+            const resultGroupTabs = Array.from(root.querySelectorAll('[data-role="result-group-tab"]'));
+            const resultGroupPanels = Array.from(root.querySelectorAll('[data-role="result-group-panel"]'));
             const resultButtons = Array.from(root.querySelectorAll('[data-role="result-button"]'));
             const directionButtons = Array.from(root.querySelectorAll('[data-role="direction-button"]'));
             const rbiButtons = Array.from(root.querySelectorAll('[data-role="rbi-button"]'));
             const modeStorageKey = 'battingInputMode';
+            let resultChooserOpen = !resultSelect?.value;
+            let directionChooserOpen = !directionSelect?.value;
 
             if (!resultSelect || !directionSelect || !rbiSelect) {
                 return;
@@ -319,6 +388,52 @@
                     button.classList.toggle('is-active', isActive);
                     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
                 });
+            };
+
+            const applyResultGroup = function (groupKey) {
+                if (!groupKey) {
+                    return;
+                }
+
+                resultGroupTabs.forEach(function (tab) {
+                    const isActive = tab.dataset.resultGroup === groupKey;
+                    tab.classList.toggle('is-active', isActive);
+                    tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+
+                resultGroupPanels.forEach(function (panel) {
+                    panel.classList.toggle('hidden', panel.dataset.resultGroup !== groupKey);
+                });
+            };
+
+            const getResultGroupForValue = function (value) {
+                if (!value) {
+                    return '';
+                }
+
+                const selectedButton = resultButtons.find(function (button) {
+                    return button.dataset.value === value;
+                });
+                const selectedPanel = selectedButton ? selectedButton.closest('[data-role="result-group-panel"]') : null;
+
+                return selectedPanel ? selectedPanel.dataset.resultGroup : '';
+            };
+
+            const updateResultSection = function () {
+                const resultName = getSelectedText(resultSelect);
+                const showPicked = Boolean(resultName) && !resultChooserOpen;
+
+                if (resultPicked) {
+                    resultPicked.classList.toggle('hidden', !showPicked);
+                }
+
+                if (resultPickedText) {
+                    resultPickedText.textContent = resultName || '未選択';
+                }
+
+                if (resultChooser) {
+                    resultChooser.classList.toggle('hidden', showPicked);
+                }
             };
 
             const getDirectionMode = function (resultName) {
@@ -377,11 +492,31 @@
                 const resultName = getSelectedText(resultSelect);
                 const directionMode = getDirectionMode(resultName);
                 const directionName = getSelectedText(directionSelect);
+                const hasDirectionValue = Boolean(directionSelect.value && directionName);
+                const isManualDirection = directionMode === 'field' || directionMode === 'strike';
+
+                if (isManualDirection && !hasDirectionValue) {
+                    directionChooserOpen = true;
+                }
+
+                if (!isManualDirection) {
+                    directionChooserOpen = false;
+                }
+
+                const showPickedDirection = Boolean(resultName) && hasDirectionValue && !directionChooserOpen;
 
                 directionPrompt.classList.toggle('hidden', directionMode !== 'none');
-                fieldSection.classList.toggle('hidden', directionMode !== 'field');
-                strikeSection.classList.toggle('hidden', directionMode !== 'strike');
-                autoSection.classList.toggle('hidden', directionMode !== 'auto-blank' && directionMode !== 'auto-swing');
+                fieldSection.classList.toggle('hidden', directionMode !== 'field' || showPickedDirection);
+                strikeSection.classList.toggle('hidden', directionMode !== 'strike' || showPickedDirection);
+                autoSection.classList.toggle('hidden', directionMode !== 'auto-blank' && directionMode !== 'auto-swing' || showPickedDirection);
+
+                if (directionPicked) {
+                    directionPicked.classList.toggle('hidden', !showPickedDirection);
+                }
+
+                if (directionPickedText) {
+                    directionPickedText.textContent = '打球方向: ' + (directionName === '空欄' ? 'なし' : directionName);
+                }
 
                 if (directionMode === 'field') {
                     directionSummary.textContent = directionName && directionName !== '空欄'
@@ -390,15 +525,19 @@
                 }
 
                 if (directionMode === 'auto-blank') {
-                    autoMessage.textContent = resultName + ' は打球方向を自動で空欄にします。';
+                    autoMessage.textContent = '打球方向: なし';
                 } else if (directionMode === 'auto-swing') {
-                    autoMessage.textContent = resultName + ' は打球方向を自動で空振にします。';
+                    autoMessage.textContent = '打球方向: 空振';
                 } else {
                     autoMessage.textContent = '';
                 }
             };
 
             const updateSummary = function () {
+                if (!summary) {
+                    return;
+                }
+
                 const resultName = getSelectedText(resultSelect);
                 const directionName = getSelectedText(directionSelect);
                 const rbiName = getSelectedText(rbiSelect);
@@ -433,12 +572,34 @@
 
             const syncAll = function () {
                 syncDirectionValue();
+                updateResultSection();
                 updateDirectionSections();
                 updateSummary();
+                applyResultGroup(getResultGroupForValue(resultSelect.value) || root.dataset.defaultResultGroup || resultGroupTabs[0]?.dataset.resultGroup);
                 setActive(resultButtons, resultSelect.value);
                 setActive(directionButtons, directionSelect.value);
                 setActive(rbiButtons, rbiSelect.value);
             };
+
+            resultGroupTabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    applyResultGroup(tab.dataset.resultGroup);
+                });
+            });
+
+            if (changeResultButton) {
+                changeResultButton.addEventListener('click', function () {
+                    resultChooserOpen = true;
+                    updateResultSection();
+                });
+            }
+
+            if (changeDirectionButton) {
+                changeDirectionButton.addEventListener('click', function () {
+                    directionChooserOpen = true;
+                    updateDirectionSections();
+                });
+            }
 
             modeButtons.forEach(function (button) {
                 button.addEventListener('click', function () {
@@ -448,6 +609,8 @@
 
             resultButtons.forEach(function (button) {
                 button.addEventListener('click', function () {
+                    resultChooserOpen = false;
+                    directionChooserOpen = true;
                     resultSelect.value = button.dataset.value;
                     resultSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 });
@@ -455,6 +618,7 @@
 
             directionButtons.forEach(function (button) {
                 button.addEventListener('click', function () {
+                    directionChooserOpen = false;
                     directionSelect.value = button.dataset.value;
                     directionSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 });
@@ -492,14 +656,40 @@
         .batting-sub-button,
         .batting-rbi-button,
         .batting-field-point,
-        .batting-mode-button {
+        .batting-mode-button,
+        .batting-result-group-tab {
             transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .batting-result-onbase {
+            border: 1px solid #a7f3d0;
+            background: #ecfdf5;
+            color: #065f46;
+        }
+
+        .batting-result-extra {
+            border: 1px solid #fcd34d;
+            background: #fffbeb;
+            color: #92400e;
+        }
+
+        .batting-result-out {
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #334155;
+        }
+
+        .batting-result-group-tab.is-active {
+            outline: 2px solid #0f172a;
+            outline-offset: 2px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
         }
 
         .batting-choice-button:active,
         .batting-sub-button:active,
         .batting-rbi-button:active,
-        .batting-mode-button:active {
+        .batting-mode-button:active,
+        .batting-result-group-tab:active {
             transform: scale(0.98);
         }
 
@@ -510,7 +700,7 @@
         .batting-field {
             position: relative;
             overflow: hidden;
-            width: 100%;
+            width: min(100%, 420px);
             margin: 0 auto;
             aspect-ratio: 10 / 9;
             border: 1px solid #bbf7d0;
@@ -545,6 +735,10 @@
         }
 
         @media (max-width: 640px) {
+            .batting-field {
+                width: 100%;
+            }
+
             .batting-field-point {
                 min-width: clamp(3rem, 14vw, 3.7rem);
                 min-height: 2.7rem;

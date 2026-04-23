@@ -14,12 +14,13 @@ class UpdateBattingStatRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'userId' => ['nullable'],
-            'userName' => ['nullable', 'string'],
+            'userId' => ['required_without:userName', 'nullable'],
+            'userName' => ['required_without:userId', 'nullable', 'string'],
             'inning' => ['required', 'integer', 'min:1'],
             'resultId1' => ['required', 'integer'],
             'resultId2' => ['required', 'integer'],
             'resultId3' => ['required', 'integer'],
+            'returnTo' => ['nullable', 'in:create'],
         ];
     }
 
@@ -27,6 +28,7 @@ class UpdateBattingStatRequest extends FormRequest
     {
         return [
             'required' => ':attribute フィールドは必須です。',
+            'required_without' => ':attribute フィールドは、:values のいずれかが存在する場合、必須です。',
         ];
     }
 }
