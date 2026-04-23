@@ -5,11 +5,41 @@
         </h2>
     </x-slot>
     <div class="container mx-auto mt-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <button id="InstallBtn" style="display: none; width:100%;" class="text-center bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-lg">
-                    アプリをインストールする
-                </button>
+        <div id="pwa-install-card" class="mx-3 mb-6 sm:mx-auto sm:max-w-7xl sm:px-6 lg:px-8" hidden>
+            <div class="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-4 text-white shadow-2xl shadow-slate-300/50 sm:p-5">
+                <div class="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-red-500/25 blur-2xl"></div>
+                <div class="pointer-events-none absolute -bottom-16 left-12 h-36 w-36 rounded-full bg-orange-400/20 blur-3xl"></div>
+                <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg shadow-black/20">
+                            <i class="fa-solid fa-mobile-screen-button text-2xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.22em] text-red-200">Quick Launch</p>
+                            <h3 class="mt-1 text-lg font-black leading-tight sm:text-xl">ホーム画面に追加</h3>
+                            <p class="mt-1 text-sm leading-relaxed text-slate-300">
+                                試合中でもワンタップで起動できます。ブラウザを探す手間を減らします。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex shrink-0 gap-2 sm:flex-col">
+                        <button
+                            id="InstallBtn"
+                            type="button"
+                            class="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-red-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-950/30 transition hover:bg-red-600 active:scale-[0.98] sm:flex-none"
+                        >
+                            <span>追加する</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                        <button
+                            id="InstallDismissBtn"
+                            type="button"
+                            class="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-white/10 sm:flex-none"
+                        >
+                            あとで
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="bg-white rounded-lg shadow-lg mb-8">
@@ -26,14 +56,14 @@
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden rounded-lg shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="game/"><h1>試合</h1></a>
+                                    <a href="{{ route('game.index') }}"><h1>試合</h1></a>
                                 </div>
                             </div>
                         </div>
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden rounded-lg shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="battingStats/index"><h1>打撃成績</h1></a>
+                                    <a href="{{ route('battingStats') }}"><h1>打撃成績</h1></a>
                                 </div>
                             </div>
                         </div>
@@ -56,14 +86,14 @@
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="payment/"><h1>入金一覧</h1></a>
+                                    <a href="{{ route('payment.index') }}"><h1>入金一覧</h1></a>
                                 </div>
                             </div>
                         </div>
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="disbur/"><h1>出金一覧</h1></a>
+                                    <a href="{{ route('disbur.index') }}"><h1>出金一覧</h1></a>
                                 </div>
                             </div>
                         </div>
@@ -107,21 +137,21 @@
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="payment/create"><h1>入金登録</h1></a>
+                                    <a href="{{ route('payment.create') }}"><h1>入金登録</h1></a>
                                 </div>
                             </div>
                         </div>
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="disbur/create"><h1>出金登録</h1></a>
+                                    <a href="{{ route('disbur.create') }}"><h1>出金登録</h1></a>
                                 </div>
                             </div>
                         </div>
                         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
                             <div class="bg-white overflow-hidden shadow-sm border sm:rounded-lg">
                                 <div class="p-6 text-gray-900 text-center">
-                                    <a href="dcategory"><h1>カテゴリマスタ</h1></a>
+                                    <a href="{{ route('dcategory.index') }}"><h1>カテゴリマスタ</h1></a>
                                 </div>
                             </div>
                         </div>
@@ -147,31 +177,55 @@
     </div>
 </x-app-layout>
 <script>
-//バナーの代わりに表示するボタンを登録する
-registerInstallAppEvent(document.getElementById("InstallBtn"));
+document.addEventListener('DOMContentLoaded', function() {
+    const installCard = document.getElementById('pwa-install-card');
+    const installButton = document.getElementById('InstallBtn');
+    const dismissButton = document.getElementById('InstallDismissBtn');
+    let deferredInstallPrompt = null;
 
-//バナー表示をキャンセルし、代わりに表示するDOM要素を登録する関数
-//引数１：イベントを登録するHTMLElement
-function registerInstallAppEvent(elem){
-  //インストールバナー表示条件満足時のイベントを乗っ取る
-  window.addEventListener('beforeinstallprompt', function(event){
-    console.log("beforeinstallprompt: ", event);
-    event.preventDefault(); //バナー表示をキャンセル
-    elem.promptEvent = event; //eventを保持しておく
-    elem.style.display = "block"; //要素を表示する
-    return false;
-  });
-  //インストールダイアログの表示処理
-  function installApp() {
-    if(elem.promptEvent){
-      elem.promptEvent.prompt(); //ダイアログ表示
-      elem.promptEvent.userChoice.then(function(choice){
-        elem.style.display = "none";
-        elem.promptEvent = null; //一度しか使えないため後始末
-      });//end then
+    if (!installCard || !installButton || !dismissButton) {
+        return;
     }
-  }//end installApp
-  //ダイアログ表示を行うイベントを追加
-  elem.addEventListener("click", installApp);
-}//end registerInstallAppEvent
+
+    const hideInstallCard = function() {
+        installCard.hidden = true;
+    };
+
+    const showInstallCard = function() {
+        if (sessionStorage.getItem('pwa-install-dismissed') === '1') {
+            return;
+        }
+
+        installCard.hidden = false;
+    };
+
+    window.addEventListener('beforeinstallprompt', function(event) {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        showInstallCard();
+    });
+
+    window.addEventListener('appinstalled', function() {
+        deferredInstallPrompt = null;
+        hideInstallCard();
+    });
+
+    installButton.addEventListener('click', async function() {
+        if (!deferredInstallPrompt) {
+            return;
+        }
+
+        installButton.disabled = true;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        installButton.disabled = false;
+        hideInstallCard();
+    });
+
+    dismissButton.addEventListener('click', function() {
+        sessionStorage.setItem('pwa-install-dismissed', '1');
+        hideInstallCard();
+    });
+});
 </script>
