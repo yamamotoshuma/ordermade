@@ -2,9 +2,10 @@
 
 ## Current Situation
 
-- The production server checkout has a `.git` directory.
-- That Git history is effectively unusable as a source of truth because the live code exists mostly as uncommitted working tree changes.
-- The local workspace was imported without the remote `.git` directory on purpose.
+- The production server previously had Git metadata, but it was not a reliable source of truth.
+- The live code existed mostly as uncommitted working tree changes.
+- The local workspace was imported without the production `.git` metadata on purpose.
+- This document is sanitized for public repositories and avoids production hostnames, users, and concrete server paths.
 
 ## Recommended Source Of Truth
 
@@ -12,57 +13,60 @@ Use this local workspace as the new baseline after review.
 
 Reasons:
 
-- the server working tree had substantial drift
+- the production working tree had substantial drift
 - production-only secrets were removed from local `.env`
-- the compromised `public/index.php` was cleaned locally
-- local docs now describe the split deployment shape
+- a compromised front controller was cleaned locally
+- local docs now describe the split deployment shape without exposing production details
 
 ## Recommended Migration Steps
 
 1. Review the local workspace and docs.
-2. Initialize a fresh Git repository locally.
+2. Initialize or continue from the cleaned Git repository locally.
 3. Keep `.env` untracked and commit `.env.example` only.
 4. Commit the cleaned application state.
-5. Create a new GitHub repository or replace the old remote after backup.
-6. Add the new `origin` from the local workspace and push.
+5. Create or update the GitHub repository after any required backup.
+6. Add or verify the `origin` from the local workspace and push.
 7. Change the deployment process so production updates come from GitHub or an explicit deploy script, not ad hoc server edits.
 
 ## Deployment Considerations
 
-A deploy to Sakura must handle both layers:
+Production deployment must handle two layers:
 
-- application code into `~/ordermade`
-- public files into `~/www/kanri`
+- Laravel application files
+- public web root files
 
-Do not assume `~/ordermade/public` alone is the public root in production.
+Do not assume the Laravel app's internal `public/` directory is directly exposed in production.
 
 ## Suggested Server Layout
 
 Use three distinct concerns on the server:
 
-- `~/ordermade-repo`: clean Git checkout used for `git pull`
-- `~/ordermade`: live Laravel application directory
-- `~/www/kanri`: live public web root
+- clean Git checkout used for `git pull`
+- live Laravel application directory
+- live public web root
 
-The repository now includes `deploy/sakura/deploy.sh` to sync from `~/ordermade-repo` into the two live locations.
+Concrete names and paths should be kept in private operations notes or environment variables.
 
-Because the server does not build frontend assets, keep `public/build` committed as part of the deployable tree unless the server build strategy changes.
+The repository includes a generic deploy script that can sync from a clean checkout into the two live locations when destination paths are provided via environment variables.
+
+Because the production server does not build frontend assets, keep `public/build` committed as part of the deployable tree unless the server build strategy changes.
 
 ## Server Cleanup Recommendation
 
 Before switching to the new Git flow:
 
-- back up `~/ordermade`
-- back up `~/www/kanri`
-- inspect and clean the suspicious `~/ordermade/public/index.php`
-- remove or archive the old `.git` metadata on the server only after the new baseline is confirmed
+- back up the live Laravel application directory
+- back up the live public web root
+- inspect and clean the suspicious front controller
+- remove or archive old production Git metadata only after the new baseline is confirmed
 
 ## Future Improvement
 
-Once the new GitHub repository exists, add a small deploy script that:
+Keep deployment small and explicit:
 
-1. pulls the app repo into `~/ordermade`
-2. syncs `public/` into `~/www/kanri`
-3. runs any required artisan cache clear/rebuild commands
+1. pull the app repo into a clean checkout
+2. sync application files into the live app directory
+3. sync `public/` into the live public directory
+4. run any required artisan migration and cache-clear commands
 
 That will prevent the same Git drift from reappearing.

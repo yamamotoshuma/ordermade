@@ -4,18 +4,16 @@
 
 - `2026-04-20`
 
-## Remote Paths
+## Publication Policy
 
-- Host: `ordermade.sakura.ne.jp`
-- SSH user: `ordermade`
-- App root: `~/ordermade`
-- Public web root: `~/www/kanri`
+This document is sanitized for a public repository.
+It intentionally does not include production hostnames, connection users, concrete server paths, database hosts, or mail endpoints.
 
 ## Runtime Observations
 
-- PHP: `8.3.30`
-- Composer: `2.5.8`
-- Node.js: not installed on the server
+- PHP 8.3系
+- Composer 2系
+- Node.js is not available on the production server
 - Package manager on the app: Composer + npm lockfile present
 
 ## Framework and Dependencies
@@ -28,8 +26,10 @@
 
 ## Deployment Shape
 
-- `~/ordermade` holds the application code, `.env`, `vendor/`, `storage/`, migrations, and the internal `public/` folder.
-- `~/www/kanri` holds the publicly exposed files:
+Production uses a split deployment shape:
+
+- A live Laravel application directory contains application code, `.env`, `vendor/`, `storage/`, migrations, and an internal `public/` folder.
+- A separate public web root contains publicly exposed files such as:
   `.htaccess`
   `index.php`
   `manifest.json`
@@ -37,16 +37,17 @@
   `build/`
   icon files
   splash screens
-- `~/www/kanri/index.php` points back into `~/ordermade/bootstrap`, `~/ordermade/vendor`, and `~/ordermade/storage`.
+- The public front controller points back to the Laravel application directory.
 
-## Git State On The Server
+Concrete directory names are intentionally omitted. Use private operations notes for actual server paths.
 
-- `origin` was configured as `https://github.com/yamamotoshuma/ordermade.git`
-- `master`, `origin/master`, and `origin/HEAD` all pointed to:
-  `ac1cd59 firstcommit`
-- The working tree in `~/ordermade` had many modified tracked files and many untracked files.
+## Git State Observed During Import
+
+- The production server had Git metadata, but it was not a reliable source of truth.
+- The deployed application existed mostly as uncommitted working tree changes.
+- The local workspace was therefore imported without trusting production Git metadata.
 - Conclusion:
-  the production server is being used as an editing surface, and GitHub is not a faithful representation of the deployed app.
+  GitHub should be treated as the source of truth going forward, and production should be updated via an explicit deploy flow.
 
 ## Functional Surface Area
 
@@ -54,49 +55,42 @@ Controllers and routes indicate these modules:
 
 - `PayController`: payments and bulk payment insert
 - `dCategoryController`: expense category master
-- `disburController`: disbursement entry, edit, score view
-- `GameController`: game CRUD and bulk update/insert
+- `disburController`: disbursement entry and related screens
+- `GameController`: game CRUD and bulk score update/insert
 - `BattingEditController`: per-game batting result editing
-- `BattingOrderController`: batting order CRUD
+- `BattingOrderController`: batting order CRUD and spreadsheet import
 - `BattingStatsController`: batting aggregate stats
 - `PitchingStatsController`: pitching stats entry/edit/delete
 - `StealController`: steal tracking
-- `ContactController`: contact form and mail view
+- `ContactController`: contact form and notifications
 - Breeze auth/profile flows
 
-The app currently exposes `83` routes.
+## Configuration Notes From Production `.env`
 
-## Configuration Notes From `.env`
+The production `.env` contained production-only database and mail settings.
+Those values are intentionally not copied into this repository.
 
-The server `.env` used:
-
-- `DB_CONNECTION=mysql`
-- remote Sakura MySQL host
-- SMTP mailer against the production host
-- `APP_ENV=local`
-- `APP_URL=http://localhost`
-
-Those values were not appropriate to copy directly into a local development environment, so the local `.env` was sanitized after import.
+For local development, use the sanitized `.env.example` and local Sail defaults.
 
 ## Security Findings
 
-- `~/ordermade/public/index.php` contained obfuscated PHP prepended before the normal Laravel bootstrap code.
+- One copied internal public front controller contained injected obfuscated PHP before the normal Laravel bootstrap code.
 - That injected code referenced external domains and attempted to write extra PHP files.
-- `~/www/kanri/index.php` was clean and did not include the injected block.
-- Action taken locally:
-  the copied `public/index.php` was replaced with a clean Laravel front controller.
-- Action still recommended on the server:
-  inspect and clean `~/ordermade/public/index.php` and review the rest of the deployment for compromise.
+- A clean front controller was used in the local workspace.
+- Recommended production-side action:
+  inspect and clean the affected front controller and review the rest of the deployment for compromise.
+
+No malicious payload content, domains, or exact production paths are included here.
 
 ## Public Asset Differences
 
-The deployed `~/www/kanri` directory differed from `~/ordermade/public` in several important ways:
+The live public web root differed from the Laravel app's internal `public/` directory in several important ways:
 
-- clean `index.php` in `~/www/kanri`
+- clean public front controller
 - additional PWA icons and splash screens
-- different `manifest.json`
-- different `sw.js`
+- deployment-specific `manifest.json`
+- deployment-specific `sw.js`
 
 For local development, the missing public assets were copied into `public/`, while path handling was normalized so the app works locally at `/`.
 
-Because the Sakura server does not have Node.js, the repository now tracks `public/build` so the deployed app can serve Vite-built assets without rebuilding on the server.
+Because the production server does not build frontend assets, the repository tracks `public/build` so the deployed app can serve Vite-built assets without rebuilding on the server.

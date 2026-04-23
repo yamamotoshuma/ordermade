@@ -116,6 +116,89 @@ class BattingCreateDefaultsTest extends TestCase
         $this->assertSame(3, $createConfig['inningOutCounts'][1]);
     }
 
+    public function test_duplicate_create_shows_conflict_choice_without_overwriting_existing_stat(): void
+    {
+        $viewer = User::factory()->create();
+        $batter = User::factory()->create(['name' => '重複打者']);
+        $gameId = $this->createGame();
+        $this->insertBattingStat($gameId, $batter->id, 1, 11, 18, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $batter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 13,
+            'resultId2' => 29,
+            'resultId3' => 31,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('batting_conflict', function (array $conflict): bool {
+            return str_contains($conflict['message'], '既存データを更新しますか');
+        });
+        $response->assertSessionHasInput('resultId1', 13);
+
+        $this->assertSame(1, DB::table('batting_stats')->where('gameId', $gameId)->count());
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $batter->id,
+            'inning' => 1,
+            'resultId1' => 11,
+            'resultId2' => 18,
+            'resultId3' => 31,
+        ]);
+    }
+
+    public function test_duplicate_create_can_update_existing_stat_after_confirmation(): void
+    {
+        $viewer = User::factory()->create();
+        $batter = User::factory()->create(['name' => '更新打者']);
+        $gameId = $this->createGame();
+        $this->insertBattingStat($gameId, $batter->id, 1, 11, 18, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $batter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 13,
+            'resultId2' => 29,
+            'resultId3' => 32,
+            'conflictResolution' => 'update',
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('message', '打撃成績を更新しました');
+
+        $this->assertSame(1, DB::table('batting_stats')->where('gameId', $gameId)->count());
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $batter->id,
+            'inning' => 1,
+            'resultId1' => 13,
+            'resultId2' => 29,
+            'resultId3' => 32,
+        ]);
+    }
+
+    public function test_create_screen_renders_conflict_update_action(): void
+    {
+        $viewer = User::factory()->create();
+        $gameId = $this->createGame();
+
+        $response = $this->actingAs($viewer)
+            ->withSession([
+                'batting_conflict' => [
+                    'statsId' => 123,
+                    'message' => 'すでに打撃データが存在します。既存データを更新しますか？',
+                ],
+            ])
+            ->get(route('batting.create', ['game' => $gameId]));
+
+        $response->assertOk();
+        $response->assertSee('同じ打者・同じイニングの成績がすでに登録されています。', false);
+        $response->assertSee('現在の入力内容で更新する', false);
+    }
+
     private function createGame(): int
     {
         return DB::table('games')->insertGetId([
@@ -128,5 +211,22 @@ class BattingCreateDefaultsTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ], 'gameId');
+    }
+
+    private function insertBattingStat(int $gameId, int $userId, int $inning, int $resultId1, int $resultId2, int $resultId3): void
+    {
+        DB::table('batting_stats')->insert([
+            'gameId' => $gameId,
+            'userId' => $userId,
+            'userName' => null,
+            'inning' => $inning,
+            'resultId1' => $resultId1,
+            'resultId2' => $resultId2,
+            'resultId3' => $resultId3,
+            'resultId4' => null,
+            'resultId5' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

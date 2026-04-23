@@ -116,11 +116,11 @@ Only configuration or Google API failures are treated as errors.
 
 ## Path Normalization
 
-Production serves the app from `/kanri`, but local development serves it from `/`.
+Production may serve the app from a subdirectory, but local development serves it from `/`.
 
 To support both environments:
 
-- public asset references in `resources/views/layouts/app.blade.php` now derive from the request base path
+- public asset references in `resources/views/layouts/app.blade.php` derive from the request base path
 - `public/manifest.json` uses relative asset paths
 - `public/index.php` is a standard Laravel front controller
 

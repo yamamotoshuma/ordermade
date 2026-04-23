@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\BattingStatConflictException;
 use App\Models\BattingOrder;
 use App\Models\BattingResultMaster;
 use App\Models\BattingStats;
@@ -79,30 +80,26 @@ class BattingStatService
     }
 
     /**
-     * 打撃成績を1件登録する。
+     * 打撃成績を1件登録する。既存行がある場合は確認なしでは更新しない。
      */
     public function create(Game $game, array $payload): BattingStats
     {
-        return DB::transaction(function () use ($game, $payload) {
-            $this->ensureExclusiveBatter($payload);
+        $this->ensureExclusiveBatter($payload);
 
-            $existingBattingStat = $this->findExistingBattingStat($game, $payload);
+        return $this->withEntryLock($game, $payload, function () use ($game, $payload): BattingStats {
+            return DB::transaction(function () use ($game, $payload): BattingStats {
+                $existingBattingStat = $this->findExistingBattingStat($game, $payload, true);
 
-            if ($existingBattingStat) {
-                throw new RuntimeException('すでに打撃データが存在します');
-            }
+                if ($existingBattingStat) {
+                    if (($payload['conflictResolution'] ?? null) === 'update') {
+                        return $this->saveFromPayload($existingBattingStat, $game->gameId, $payload);
+                    }
 
-            $battingStat = new BattingStats();
-            $battingStat->gameId = $game->gameId;
-            $battingStat->userId = $payload['userId'] ?? null;
-            $battingStat->userName = $payload['userName'] ?? null;
-            $battingStat->inning = (int) $payload['inning'];
-            $battingStat->resultId1 = (int) $payload['resultId1'];
-            $battingStat->resultId2 = (int) $payload['resultId2'];
-            $battingStat->resultId3 = (int) $payload['resultId3'];
-            $battingStat->save();
+                    throw new BattingStatConflictException($existingBattingStat);
+                }
 
-            return $battingStat;
+                return $this->saveFromPayload(new BattingStats(), $game->gameId, $payload);
+            });
         });
     }
 
@@ -112,15 +109,7 @@ class BattingStatService
     public function update(BattingStats $batting, array $payload): BattingStats
     {
         return DB::transaction(function () use ($batting, $payload) {
-            $batting->userId = $payload['userId'] ?? null;
-            $batting->userName = $payload['userName'] ?? null;
-            $batting->inning = (int) $payload['inning'];
-            $batting->resultId1 = (int) $payload['resultId1'];
-            $batting->resultId2 = (int) $payload['resultId2'];
-            $batting->resultId3 = (int) $payload['resultId3'];
-            $batting->save();
-
-            return $batting;
+            return $this->saveFromPayload($batting, (int) $batting->gameId, $payload);
         });
     }
 
@@ -149,17 +138,82 @@ class BattingStatService
 
     /**
      * 同一試合・同一イニング・同一打者の重複登録を検知する。
+     * 更新前提の検索では既存行に行ロックをかける。
      */
-    private function findExistingBattingStat(Game $game, array $payload): ?BattingStats
+    private function findExistingBattingStat(Game $game, array $payload, bool $forUpdate = false): ?BattingStats
     {
         $query = BattingStats::where('gameId', $game->gameId)
             ->where('inning', (int) $payload['inning']);
+
+        if ($forUpdate) {
+            $query->lockForUpdate();
+        }
 
         if (filled($payload['userId'] ?? null)) {
             return $query->where('userId', (int) $payload['userId'])->first();
         }
 
         return $query->where('userName', (string) ($payload['userName'] ?? ''))->first();
+    }
+
+    /**
+     * モデルへ入力値を反映して保存する共通処理。
+     */
+    private function saveFromPayload(BattingStats $battingStat, int $gameId, array $payload): BattingStats
+    {
+        $battingStat->gameId = $gameId;
+        $battingStat->userId = $payload['userId'] ?? null;
+        $battingStat->userName = $payload['userName'] ?? null;
+        $battingStat->inning = (int) $payload['inning'];
+        $battingStat->resultId1 = (int) $payload['resultId1'];
+        $battingStat->resultId2 = (int) $payload['resultId2'];
+        $battingStat->resultId3 = (int) $payload['resultId3'];
+        $battingStat->save();
+
+        return $battingStat;
+    }
+
+    /**
+     * 同じ打者・同じイニングの新規登録が同時実行されないようにする。
+     */
+    private function withEntryLock(Game $game, array $payload, callable $callback): BattingStats
+    {
+        if (! $this->supportsMysqlNamedLocks()) {
+            return $callback();
+        }
+
+        $lockName = $this->makeEntryLockName($game, $payload);
+        $lock = DB::selectOne('SELECT GET_LOCK(?, 5) AS acquired', [$lockName]);
+
+        if ((int) ($lock->acquired ?? 0) !== 1) {
+            throw new RuntimeException('他の端末が同じ打者の登録処理中です。少し待ってから再度登録してください。');
+        }
+
+        try {
+            return $callback();
+        } finally {
+            DB::selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockName]);
+        }
+    }
+
+    /**
+     * MySQL 以外のテスト環境では名前付きロックを使わず通常実行する。
+     */
+    private function supportsMysqlNamedLocks(): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql';
+    }
+
+    /**
+     * MySQL の名前付きロック上限に収まる衝突キーを作る。
+     */
+    private function makeEntryLockName(Game $game, array $payload): string
+    {
+        $batterKey = filled($payload['userId'] ?? null)
+            ? 'id:' . (int) $payload['userId']
+            : 'name:' . trim((string) ($payload['userName'] ?? ''));
+
+        return 'batting:' . sha1($game->gameId . ':' . (int) $payload['inning'] . ':' . $batterKey);
     }
 
     /**
@@ -176,9 +230,11 @@ class BattingStatService
             $defaultInning = $latestInning + (($inningOutCounts[$latestInning] ?? 0) >= 3 ? 1 : 0);
         }
 
-        $selectableOrders = $orders->filter(function ($order) use ($users) {
+        $activeUserIds = $users->pluck('id')->flip();
+
+        $selectableOrders = $orders->filter(function ($order) use ($activeUserIds) {
             if ($order->userId) {
-                return $users->contains('id', $order->userId);
+                return $activeUserIds->has($order->userId);
             }
 
             return filled($order->userName);

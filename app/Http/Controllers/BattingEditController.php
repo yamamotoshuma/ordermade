@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\BattingStatConflictException;
 use App\Http\Requests\StoreBattingStatRequest;
 use App\Http\Requests\UpdateBattingStatRequest;
 use App\Models\BattingStats;
@@ -36,17 +37,26 @@ class BattingEditController extends Controller
     {
         try {
             $battingStat = $this->battingStatService->create($game, $request->validated());
-            Log::info('打撃登録完了');
+            $message = $battingStat->wasRecentlyCreated ? '打撃成績を登録しました' : '打撃成績を更新しました';
+            Log::info($battingStat->wasRecentlyCreated ? '打撃登録完了' : '打撃衝突更新完了');
 
             if ($request->boolean('fromEdit')) {
                 return redirect()
                     ->route('batting.index', ['game' => $game, 'statsId' => $battingStat->id])
-                    ->with('message', '打撃成績を登録しました');
+                    ->with('message', $message);
             }
 
             return redirect()
                 ->route('batting.create', ['game' => $game])
-                ->with('message', '打撃成績を登録しました');
+                ->with('message', $message);
+        } catch (BattingStatConflictException $e) {
+            return redirect()
+                ->route('batting.create', ['game' => $game])
+                ->withInput()
+                ->with('batting_conflict', [
+                    'statsId' => $e->battingStat->id,
+                    'message' => $e->getMessage(),
+                ]);
         } catch (RuntimeException $e) {
             return redirect()
                 ->route('batting.create', ['game' => $game])

@@ -41,11 +41,28 @@
 
                 $metaPanelOpen = $errors->hasAny(['userId', 'userName', 'inning'])
                     || (blank($initialUserId) && blank($initialUserName));
+                $battingConflict = session('batting_conflict');
             @endphp
+
+            @if($battingConflict)
+                <div id="batting-conflict-alert" class="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm">
+                    <p class="font-semibold">同じ打者・同じイニングの成績がすでに登録されています。</p>
+                    <p class="mt-1 text-sm">{{ $battingConflict['message'] ?? '既存データを更新しますか？' }}</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" data-role="confirm-conflict-update" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+                            現在の入力内容で更新する
+                        </button>
+                        <a href="{{ route('batting.create', ['game' => $game]) }}" class="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                            やめる
+                        </a>
+                    </div>
+                </div>
+            @endif
 
             <form id="batting-create-form" method="POST" action="{{ route('batting.store',$game) }}" enctype="multipart/form-data" data-create-config='@json($createConfig)'>
                 @csrf
-                <input type="hidden" name="fromEdit" value="{{ request('fromEdit', false) }}">
+                <input type="hidden" name="fromEdit" value="{{ old('fromEdit', request('fromEdit', false)) }}">
+                <input type="hidden" name="conflictResolution" id="batting-conflict-resolution" value="">
 
                 <details id="batting-meta-panel" class="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" @if($metaPanelOpen) open @endif>
                     <summary class="cursor-pointer list-none">
@@ -145,6 +162,8 @@
         const metaSummary = document.querySelector('[data-role="batting-meta-summary"]');
         const manualUserWrapper = document.getElementById('batting-manual-user-wrapper');
         const metaPanel = document.getElementById('batting-meta-panel');
+        const conflictUpdateButton = document.querySelector('[data-role="confirm-conflict-update"]');
+        const conflictResolutionInput = document.getElementById('batting-conflict-resolution');
         const createConfig = form ? JSON.parse(form.dataset.createConfig || '{}') : {};
 
         const updateMetaSummary = function() {
@@ -307,6 +326,20 @@
                 }
 
                 showLoading();
+            });
+        }
+
+        if (conflictUpdateButton && form && conflictResolutionInput) {
+            conflictUpdateButton.addEventListener('click', function() {
+                const confirmed = window.confirm('すでに登録されている打撃成績を、現在の入力内容で更新しますか？');
+
+                if (!confirmed) {
+                    return;
+                }
+
+                conflictResolutionInput.value = 'update';
+                showLoading();
+                form.submit();
             });
         }
 
