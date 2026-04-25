@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\BattingConfirmationState;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateBattingStatRequest extends FormRequest
@@ -9,6 +10,11 @@ class UpdateBattingStatRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        app(BattingConfirmationState::class)->restoreEditPayload($this);
     }
 
     public function rules(): array
@@ -21,6 +27,7 @@ class UpdateBattingStatRequest extends FormRequest
             'resultId2' => ['required', 'integer'],
             'resultId3' => ['required', 'integer'],
             'returnTo' => ['nullable', 'in:create'],
+            'confirmationResolution' => ['nullable', 'in:duplicate,rbi'],
         ];
     }
 

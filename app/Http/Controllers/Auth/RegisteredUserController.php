@@ -135,6 +135,7 @@ class RegisteredUserController extends Controller
             || DB::table('batting_orders')->where('userId', $userId)->exists()
             || DB::table('batting_stats')->where('userId', $userId)->exists()
             || DB::table('steals')->where('userId', $userId)->exists()
+            || DB::table('base_running_events')->where('actorUserId', $userId)->exists()
             || DB::table('pitching_stats')->where('userId', $userId)->exists();
     }
 }

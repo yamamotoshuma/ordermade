@@ -8,11 +8,13 @@ use RuntimeException;
 class BattingStatConflictException extends RuntimeException
 {
     /**
-     * 衝突した既存打撃成績を画面側へ返すために保持する。
+     * 打撃入力でユーザー確認が必要な場合に投げる。
      */
     public function __construct(
-        public readonly BattingStats $battingStat,
-        string $message = 'すでに打撃データが存在します。既存データを更新しますか？'
+        public readonly ?BattingStats $battingStat = null,
+        string $message = '打撃入力内容の確認が必要です。',
+        public readonly string $title = '確認が必要です。',
+        public readonly string $resolution = 'duplicate'
     ) {
         parent::__construct($message);
     }

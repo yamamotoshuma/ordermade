@@ -76,12 +76,25 @@
                 $backUrl = $returnToCreate
                     ? route('batting.create', ['game' => $batting->gameId])
                     : route('batting.index', ['game' => $batting->gameId]);
+                $battingConfirmation = session('batting_confirmation');
+                $editConfirmationResolution = (string) ($battingConfirmation['resolution'] ?? '');
             @endphp
             <p class="mt-4 mb-4 text-sm text-gray-600">
                 <a href="{{ $backUrl }}" class="inline-flex rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-600">
                     {{ $returnToCreate ? '登録画面に戻る' : '打撃成績に戻る' }}
                 </a>
             </p>
+            @if($battingConfirmation)
+                @include('batting.partials.confirmation-alert', [
+                    'title' => $battingConfirmation['title'] ?? '確認が必要です。',
+                    'message' => $battingConfirmation['message'] ?? 'このまま更新するか確認してください。',
+                    'action' => route('batting.update', $batting->id),
+                    'resolution' => $editConfirmationResolution,
+                    'buttonLabel' => 'このまま更新する',
+                    'cancelUrl' => request()->fullUrl(),
+                    'hiddenFields' => $returnToCreate ? ['returnTo' => 'create'] : [],
+                ])
+            @endif
             <form id="batting-edit-form" method="POST" action="{{ route('batting.update',$batting->id) }}" enctype="multipart/form-data">
                 @csrf
                 @if($returnToCreate)
@@ -151,7 +164,7 @@
                     <div class="min-w-0 flex-1">
                         <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">編集中の打撃成績</p>
                         <p data-role="edit-sticky-summary" class="mt-1 truncate text-sm font-bold text-slate-900 sm:text-base">
-                            {{ $batting->inning }}回 / {{ $batterLabel ?: '未設定' }} / {{ $resultLabel }} / 打点 {{ $rbiLabel ?? '未設定' }}
+                            {{ $batting->inning }}回@if(($batting->inningTurn ?? 1) > 1) {{ $batting->inningTurn }}打席目@endif / {{ $batterLabel ?: '未設定' }} / {{ $resultLabel }} / 打点 {{ $rbiLabel ?? '未設定' }}
                         </p>
                     </div>
                     <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">

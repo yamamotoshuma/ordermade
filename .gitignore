@@ -18,3 +18,5 @@ yarn-error.log
 /.vscode
 /storage/app/private/google/*.json
 /subtle-builder-449102-g9-2c5b64ba47f5.json
+/playwright-report
+/test-results

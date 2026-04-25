@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\BaseRunningEventController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PayController;
 use App\Http\Controllers\dCategoryController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\StealController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\PitchingStatsController;
 use App\Models\pitchingStats;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\URL;
 
 /*
@@ -58,6 +60,8 @@ Route::post('/game/bulk-update-insert', [GameController::class,'bulkUpdateOrInse
 Route::get('batting/{game}', [BattingEditController::class, 'index'])->middleware(['auth', 'verified'])->name('batting.index');
 Route::get('batting/{game}/create', [BattingEditController::class, 'create'])->middleware(['auth', 'verified'])->name('batting.create');
 Route::post('batting/{game}', [BattingEditController::class, 'store'])->middleware(['auth', 'verified'])->name('batting.store');
+Route::post('batting/{game}/runner-events', [BaseRunningEventController::class, 'store'])->middleware(['auth', 'verified'])->name('batting.runnerEvents.store');
+Route::delete('batting/{game}/runner-events/latest', [BaseRunningEventController::class, 'destroyLatest'])->middleware(['auth', 'verified'])->name('batting.runnerEvents.destroyLatest');
 Route::get('batting/{batting}/edit', [BattingEditController::class, 'edit'])->middleware(['auth', 'verified'])->name('batting.edit');
 Route::post('batting/{batting}/update', [BattingEditController::class, 'update'])->middleware(['auth', 'verified'])->name('batting.update');
 Route::delete('batting/{batting}/delete', [BattingEditController::class, 'destroy'])->middleware(['auth', 'verified'])->name('batting.destroy');
@@ -81,5 +85,25 @@ Route::post('pitching/{gameId}', [PitchingStatsController::class, 'store'])->mid
 Route::post('pitching/{pitching}/updateNumber', [PitchingStatsController::class, 'updateNumber'])->middleware(['auth', 'verified'])->name('pitching.updateNumber');
 
 Route::get('battingStats/index', [BattingStatsController::class, 'index'])->middleware(['auth', 'verified'])->name('battingStats');
+
+if (app()->environment('local')) {
+    Route::get('/_testing/visual-regression/seed', function () {
+        Artisan::call('visual-regression:seed');
+
+        return response()->json([
+            'status' => 'ok',
+            'output' => Artisan::output(),
+        ]);
+    })->name('testing.visual-regression.seed');
+
+    Route::get('/_testing/batting-flow/seed', function () {
+        Artisan::call('testing:seed-batting-flow-fixture');
+
+        return response()->json([
+            'status' => 'ok',
+            'output' => Artisan::output(),
+        ]);
+    })->name('testing.batting-flow.seed');
+}
 
 require __DIR__.'/auth.php';

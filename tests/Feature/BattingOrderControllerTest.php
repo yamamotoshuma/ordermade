@@ -7,11 +7,13 @@ use App\Services\GoogleSheetsOrderImporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Mockery\MockInterface;
+use Tests\Concerns\BuildsBattingTestData;
 use Tests\TestCase;
 
 class BattingOrderControllerTest extends TestCase
 {
     use RefreshDatabase;
+    use BuildsBattingTestData;
 
     protected function setUp(): void
     {
@@ -143,19 +145,5 @@ class BattingOrderControllerTest extends TestCase
             ['positionId' => 2, 'positionName' => '捕', 'created_at' => now(), 'updated_at' => now()],
             ['positionId' => 5, 'positionName' => '三', 'created_at' => now(), 'updated_at' => now()],
         ]);
-    }
-
-    private function createGame(): int
-    {
-        return DB::table('games')->insertGetId([
-            'gameName' => 'テスト試合',
-            'year' => 2026,
-            'gameDates' => now(),
-            'enemyName' => 'テスト相手',
-            'gameFirstFlg' => 0,
-            'winFlg' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ], 'gameId');
     }
 }

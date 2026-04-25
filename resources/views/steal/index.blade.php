@@ -16,6 +16,19 @@
                 </a>
             </p>
                 <div class="overflow-x-auto bg-white">
+                    @php
+                        $resolveStealCount = function ($userId, $userName) use ($stealCounts) {
+                            $matchedCount = $stealCounts->first(function ($count) use ($userId, $userName) {
+                                if ($userId !== null) {
+                                    return (int) ($count->userId ?? 0) === (int) $userId;
+                                }
+
+                                return trim((string) ($count->userName ?? '')) === trim((string) $userName);
+                            });
+
+                            return $matchedCount?->count ?? '';
+                        };
+                    @endphp
                     <table class="min-w-full border rounded-lg text-sm">
                         <thead>
                             <tr>
@@ -33,7 +46,7 @@
                                 <td class="px-1 py-1 border">{{$battingOrder->battingOrder}}</td>
                                 <td class="px-1 py-1 border">{{$battingOrder->position->positionName}}</td>
                                 <td class="px-2 py-1 border">{{$battingOrder->user->name}}</td>
-                                <td class="px-1 py-1 border">{{$stealCounts->where('userId',$battingOrder->userId)->pluck('count')->first()}}</td>
+                                <td class="px-1 py-1 border">{{ $resolveStealCount($battingOrder->userId, $battingOrder->userName) }}</td>
                                 <td class="px-2 py-1 border text-center">
                                     <form method="POST" action="{{ route('steal.store') }}">
                                         @csrf

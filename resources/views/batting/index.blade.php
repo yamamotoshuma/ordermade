@@ -28,13 +28,18 @@
                                 <th class="px-2 py-1 border max-w-xs whitespace-nowrap">打順</th>
                                 <th class="px-2 py-1 border max-w-xs whitespace-nowrap">守備位置</th>
                                 <th class="px-2 py-1 border max-w-xs whitespace-nowrap">選手名</th>
-                                @for ($i = 1; $i <= max($battingStats->max('inning'), 9); $i++)
-                                <th class="px-2 py-1 border max-w-xs whitespace-nowrap">{{$i}}</th>
-                                @endfor
+                                @foreach ($battingColumns as $column)
+                                    <th class="px-2 py-1 border max-w-xs whitespace-nowrap">{{ $column['label'] }}</th>
+                                @endforeach
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($orders as $order)
+                                    @php
+                                        $playerKey = $order->userId !== null
+                                            ? 'id:' . $order->userId
+                                            : 'name:' . trim((string) $order->userName);
+                                    @endphp
                                     <tr>
                                         <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
                                             @if ( $order->ranking === 1)
@@ -55,28 +60,20 @@
                                                 {{ $order->userName }}
                                             @endif
                                         </td>
-                                        @for ($i = 1; $i <= max($battingStats->max('inning'), 9); $i++)
-                                        <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
+                                        @foreach ($battingColumns as $column)
                                             @php
-                                                $hasStats = false;
+                                                $stats = $battingCellMap[$playerKey][$column['inning']][$column['turn']] ?? null;
                                             @endphp
-                                            @foreach ($battingStats as $stats)
-                                                @if($stats->inning == $i)
-                                                    @if(($order->userId && $order->userId === $stats->userId) || ($order->userName && $order->userName == $stats->userName))
-                                                        <label class="{{$stats->result1->type === 1 ? 'text-blue-500 font-semibold' : ''}}">
-                                                            <a href="{{ route('batting.edit', $stats) }}" class="underline">{{$stats->result2->name}}{{$stats->result1->name}} @if($statsId == $stats->id) <span class="text-red-500">NEW!</span> @endif</a>
-                                                        </label>
-                                                        @php
-                                                            $hasStats = true;
-                                                        @endphp
-                                                    @endif
+                                            <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
+                                                @if($stats)
+                                                    <label class="{{ $stats->result1->type === 1 ? 'text-blue-500 font-semibold' : '' }}">
+                                                        <a href="{{ route('batting.edit', $stats) }}" class="underline">{{ $stats->result2->name }}{{ $stats->result1->name }} @if($statsId == $stats->id) <span class="text-red-500">NEW!</span> @endif</a>
+                                                    </label>
+                                                @else
+                                                    <a href="{{ route('batting.create', ['game' => $game, 'inning' => $column['inning'], 'userId' => $order->userId, 'userName' => $order->userId ? null : $order->userName, 'fromEdit' => true]) }}" class="btn btn-primary">新規作成</a>
                                                 @endif
-                                            @endforeach
-                                            @if (!$hasStats)
-                                                <a href="{{ route('batting.create', ['game' => $game, 'inning' => $i, 'userId' => $order->userId, 'fromEdit' => true]) }}" class="btn btn-primary">新規作成</a>
-                                            @endif
-                                        </td>
-                                        @endfor
+                                            </td>
+                                        @endforeach
                                     </tr>
                             @endforeach
                         </tbody>

@@ -26,8 +26,19 @@
 - The batting create/edit screens use the label `かんたん入力`, collapse the `試合・打者・イニング` block by default, and use a responsive SVG field map.
 - The batting create screen auto-suggests the next batter from the current batting order and advances the default inning when the current inning already has 3 or more outs recorded.
 - The batting create screen warns before submitting into an inning that already has 3 or more outs.
+- The batting create screen also warns when the live current-at-bat runner state suggests at least one RBI but the entered RBI is too low.
+  This warning is intentionally limited to the current batter/current inning so delayed score entry into past situations does not create noisy false positives.
+- The batting create screen now includes a runner-state panel with a diamond view and a bottom sheet for stolen bases, double steals, non-stolen advances, runner outs, pickoffs, and manual runner placement.
+  If the next base is occupied, the steal button switches to `重盗` and credits every forced runner in that chain with a stolen base.
+  Undo removes the whole runner operation together.
+- `batting_stats` now has an `inningTurn` column so batting-around can be recorded without overwriting the first plate appearance in the same inning.
+  Trial duplicate input still warns unless that inning already contains a full pass through the batting order.
+  `game.show` and `batting.index` represent second plate appearances by adding a blank-header column immediately to the right of that inning.
+- Current inning, out count, next batter, and base occupancy are cached in `game_offense_states`, while runner history is stored in `base_running_events`.
+- The `base_running_events` migration backfills legacy `steals` rows so existing stolen-base totals keep displaying after deployment.
 - Batting stat creation uses a same-game / same-inning / same-batter conflict flow.
-  On MySQL it acquires a short named lock before checking existing rows; if an existing row is found, the create screen shows a confirmation alert and only updates the row when the user explicitly chooses update.
+  If the inning has not yet gone through the full batting order, the create/edit screens warn before adding another plate appearance for that batter in the same inning.
+  If the inning is already a full cycle, the next `inningTurn` is added automatically instead of overwriting the prior row.
 - The batting order edit screen supports spreadsheet import from Google Sheets.
   Service account JSON must live under `storage/app/private/google/` or the path set in `GOOGLE_SERVICE_ACCOUNT_PATH`, and must not be committed.
   Import policy is intentionally tolerant: incomplete rows, unknown positions, and unmatched users do not fail the whole import.

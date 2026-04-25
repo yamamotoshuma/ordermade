@@ -3,7 +3,7 @@
 ## Goal
 
 - Improve in-game smartphone input speed on the batting create/edit screens.
-- Keep the stored schema unchanged: `resultId1`, `resultId2`, `resultId3`.
+- Keep the core batting result schema centered on `resultId1`, `resultId2`, `resultId3`.
 - Avoid changes to batting list/detail HTML that other tools scrape.
 
 ## Current Approach
@@ -21,6 +21,8 @@ The `かんたん入力` picker is only a front-end layer over the existing form
 The classic `select` inputs remain available under the `通常入力` tab.
 The `かんたん入力` tab updates the same fields, so the controller and database behavior stay unchanged.
 
+Batting-around support now adds `batting_stats.inningTurn` so the same batter can have a second or third plate appearance in the same inning without overwriting the first one.
+
 ## UX Notes
 
 - The create screen now keeps batter and inning controls visible at all times. The game name is intentionally small because it usually does not change during entry.
@@ -30,6 +32,9 @@ The `かんたん入力` tab updates the same fields, so the controller and data
 - The create screen now defaults the batter to the next batting-order entry after the latest saved plate appearance when no explicit batter is supplied.
 - The create screen now defaults the inning to the next inning when the latest inning already has 3 or more outs recorded.
 - The inning field shows the current out count for the selected inning and asks for confirmation before submitting into an inning that already has 3 or more outs.
+- The create screen warns when the live base state strongly suggests at least one RBI but the entered RBI is too low. This warning only applies when the selected inning/batter still matches the current live at-bat so delayed back-entry does not produce noisy alerts.
+- If the same batter is selected again in the same inning before every batting-order slot has at least one result for that inning, the UI keeps a warning step to reduce accidental duplicate entry.
+- If the inning has already gone through the full batting order, the second plate appearance is added automatically as `inningTurn = 2` without the extra warning.
 - The create screen shows a fixed bottom submit bar so the user does not need to scroll to the end of the form during a game.
 - The fixed submit bar now emphasizes the current inning, out count, next batter, and the exact result/RBI that will be registered.
 - After a successful create/update from the create screen, a `直前の入力` card appears with quick links to edit, undo/delete, or continue entering the next plate appearance.
@@ -43,6 +48,23 @@ The `かんたん入力` tab updates the same fields, so the controller and data
 - `四球` is promoted into the frequently used result buttons.
 - The field map is rendered with a fixed SVG viewBox so the infield dirt shape stays stable across phone sizes.
 - Field-direction buttons were enlarged with responsive touch targets so outfield taps are easier on smartphones.
+
+## Runner State UX
+
+- The create screen now includes a compact `現在の攻撃状況` card above the result selector.
+- The card shows inning, out count, next batter, and a small diamond with the current runners.
+- `走者操作` opens a bottom sheet so the user can keep working on the same screen without leaving batting input.
+- Common in-game actions are one-tap buttons per base: `盗塁`, `重盗`, `進塁`, `盗塁死`, `牽制死`, `走塁死`, `ベースを空にする`.
+- If the next base is already occupied, the steal button switches from `盗塁` to `重盗`. A `重盗` operation records stolen bases for every forced runner in that chain, then undo removes the whole chain as one operation.
+- `手動配置` exists as a correction tool for real-game drift such as delayed scoring,牽制アウト, or manual scorebook fixes.
+- After batting results that cannot fully determine all runner movement from the existing schema alone, the offense-state cache flags `needsRunnerConfirmation` and auto-opens the runner sheet.
+- The runner-state cache uses `base_running_events` plus `batting_stats`, but the game detail batting HTML is left intact. Existing display pages should keep the same structure while create-screen defaults become more accurate.
+
+## Batting Table Layout
+
+- `game.show` and `batting.index` now render batting-around by adding a blank-header column to the right of the inning where a second plate appearance exists.
+- Example: if inning 3 has a second plate appearance, the header sequence becomes `1 | 2 | 3 | (blank) | 4 ...`.
+- Each cell still represents a single saved plate appearance, so edit links remain one-to-one with `batting/{id}`.
 
 ## Special Cases
 

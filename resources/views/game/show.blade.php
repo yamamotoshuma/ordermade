@@ -158,6 +158,19 @@
                             </a>
                         </p>
                         <div class="overflow-x-auto mt-4">
+                        @php
+                            $resolveStealCount = function ($userId, $userName) use ($stealCounts) {
+                                $matchedCount = $stealCounts->first(function ($count) use ($userId, $userName) {
+                                    if ($userId !== null) {
+                                        return (int) ($count->userId ?? 0) === (int) $userId;
+                                    }
+
+                                    return trim((string) ($count->userName ?? '')) === trim((string) $userName);
+                                });
+
+                                return $matchedCount?->count ?? '';
+                            };
+                        @endphp
                         <table class="table-auto w-full text-left mt-4 border border-gray-400 text-sm whitespace-no-wrap">
                             <thead class="bg-orange-500 text-white">
                                 <tr>
@@ -169,9 +182,9 @@
                                     <th class="px-2 py-1 border max-w-xs whitespace-nowrap">打点</th>
                                     <th class="px-2 py-1 border max-w-xs whitespace-nowrap">打率</th>
                                     <th class="px-2 py-1 border max-w-xs whitespace-nowrap">盗塁</th>
-                                    @for ($i = 1; $i <= $battingStats->max('inning');$i++)
-                                    <th class="px-2 py-1 border max-w-xs whitespace-nowrap">{{$i}}</th>
-                                    @endfor
+                                    @foreach ($battingColumns as $column)
+                                        <th class="px-2 py-1 border max-w-xs whitespace-nowrap">{{ $column['label'] }}</th>
+                                    @endforeach
                                 </tr>
                             </thead>
                             <tbody>
@@ -183,6 +196,9 @@
                                         @php
                                             $currentBattingOrder = $order->battingOrder;
                                             $isSubstitute = false;
+                                            $playerKey = $order->userId !== null
+                                                ? 'id:' . $order->userId
+                                                : 'name:' . trim((string) $order->userName);
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 border">
@@ -253,21 +269,20 @@
                                                 {{ $battingAverage }}
                                             </td>
                                             <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
-                                                {{$stealCounts->where('userId',$order->userId)->pluck('count')->first()}}
+                                                {{ $resolveStealCount($order->userId, $order->userName) }}
                                             </td>
-                                            @for ($i = 1; $i <= $battingStats->max('inning');$i++)
-                                            <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
-                                                @foreach ($battingStats as $stats)
-                                                @if($stats->inning == $i)
-                                                @if(($order->userId && $order->userId === $stats->userId) || ($order->userName && $order->userName == $stats->userName))
-                                                <label class="{{$stats->result1->type === 1 ? 'text-blue-500 font-semibold' : ''}}{{$stats->result3->name > 0 ? 'text-red-500 font-semibold' : ''}}">
-                                                    {{$stats->result2->name}}{{$stats->result1->name}}
-                                                </label>
-                                                @endif
-                                                @endif
-                                                @endforeach
-                                            </td>
-                                            @endfor
+                                            @foreach ($battingColumns as $column)
+                                                @php
+                                                    $stats = $battingCellMap[$playerKey][$column['inning']][$column['turn']] ?? null;
+                                                @endphp
+                                                <td class="px-2 py-1 border max-w-xs whitespace-nowrap">
+                                                    @if($stats)
+                                                        <label class="{{ $stats->result1->type === 1 ? 'text-blue-500 font-semibold' : '' }}{{ $stats->result3->name > 0 ? 'text-red-500 font-semibold' : '' }}">
+                                                            {{ $stats->result2->name }}{{ $stats->result1->name }}
+                                                        </label>
+                                                    @endif
+                                                </td>
+                                            @endforeach
                                         </tr>
                                 @endforeach
                             </tbody>

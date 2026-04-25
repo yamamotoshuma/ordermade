@@ -7,11 +7,16 @@ use App\Models\BattingStats;
 use App\Models\Game;
 use App\Models\pitchingStats;
 use App\Models\Point;
-use App\Models\Steal;
 use Illuminate\Support\Facades\DB;
 
 class GameService
 {
+    public function __construct(
+        private readonly OffenseStateService $offenseStateService,
+        private readonly BattingStatService $battingStatService
+    ) {
+    }
+
     /**
      * 試合一覧の年フィルタと表示データをまとめて返す。
      */
@@ -30,21 +35,27 @@ class GameService
      */
     public function getShowData(Game $game): array
     {
+        $battingStats = BattingStats::where('gameId', $game->gameId)
+            ->with('user', 'result1', 'result2', 'result3', 'result4', 'result5')
+            ->orderBy('inning')
+            ->orderBy('inningTurn')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+        $tableLayout = $this->battingStatService->buildTableLayout($battingStats);
+
         return [
             'game' => $game,
             'points' => Point::where('gameId', $game->gameId)->get(),
             'orders' => BattingOrder::where('gameId', $game->gameId)
                 ->with('position', 'user')
                 ->orderBy('battingOrder', 'asc')
+                ->orderBy('ranking', 'asc')
                 ->get(),
-            'battingStats' => BattingStats::where('gameId', $game->gameId)
-                ->with('user', 'result1', 'result2', 'result3', 'result4', 'result5')
-                ->get(),
-            'stealCounts' => Steal::select('userId', DB::raw('count(*) as count'))
-                ->where('gameId', $game->gameId)
-                ->whereNotNull('userId')
-                ->groupBy('userId')
-                ->get(),
+            'battingStats' => $battingStats,
+            'battingColumns' => $tableLayout['columns'],
+            'battingCellMap' => $tableLayout['cellMap'],
+            'stealCounts' => $this->offenseStateService->getStealCounts($game),
             'pitchingStats' => pitchingStats::where('gameId', $game->gameId)
                 ->with('user', 'game')
                 ->orderBy('pitchingOrder', 'asc')

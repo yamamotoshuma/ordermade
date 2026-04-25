@@ -12,7 +12,7 @@
 - 打撃成績の保存形式は `resultId1` / `resultId2` / `resultId3` が中心です。既存画面や集計への影響が大きいため、DB構造は安易に変えないでください。
 - 成績表示画面の HTML は外部アプリからスクレイピングされる前提があります。表示内容だけでなく、HTML構造変更も慎重に扱ってください。
 - 打順は途中出場により同じ打順が複数行になります。同一打順は上から `ranking = 1, 2, 3...` で扱います。
-- 打撃成績の新規登録は衝突しやすいです。同じ試合・同じイニング・同じ打者で既存データがある場合は、ユーザー確認なしに上書きしないでください。
+- 打撃成績の新規登録は衝突しやすいです。同じ試合・同じイニング・同じ打者でも、打者一巡後なら複数打席がありえます。安易に上書きせず、`inningTurn` と確認ダイアログで扱ってください。
 - スプレッドシート連携は「可能な行だけ取り込む」方針です。未知の選手は `userName` として取り込み、未知の守備位置などは基本的にスキップします。
 - `スコア表作成` は不要機能として削除済みです。復活させる場合は用途を再確認してください。
 
@@ -25,6 +25,7 @@
 - 試合登録、試合詳細、スコア入力
 - 打順登録、Google スプレッドシートからの打順反映
 - 打撃成績入力、編集、一覧、個人成績集計
+- 打撃入力画面からの走者状況管理、盗塁・進塁・走塁死入力
 - 投手成績入力、編集
 - 盗塁数管理
 - 目安箱のメール・LINE通知
@@ -33,9 +34,9 @@
 
 主要な業務ロジックは `app/Services` に寄せています。Controller は HTTP 入出力、View 選択、リダイレクト制御を中心にしてください。
 
-- `app/Http/Controllers`: 薄いコントローラ
+- `app/Http/Controllers`: コントローラー
 - `app/Http/Requests`: FormRequest による入力検証
-- `app/Services`: 業務ロジック、集計、外部連携、排他制御
+- `app/Services`: ビジネスロジック、集計、外部連携、排他制御
 - `resources/views`: Blade
 - `resources/css` / `resources/js`: フロントエンド
 - `public/build`: 本番デプロイ用のビルド済みアセット
@@ -107,30 +108,67 @@ Blade の構文確認:
 npm run build
 ```
 
+試合詳細画面のビジュアルリグレッション:
+
+```bash
+npm run test:e2e
+```
+
+基準画像を更新する場合:
+
+```bash
+npm run test:e2e:update
+```
+
+補足:
+
+- `tests/e2e/game-show-visual.spec.ts` が `試合詳細` と `打撃成績` セクションを desktop / mobile Chromium で比較します。
+- 実行時にローカル限定ルート `/_testing/visual-regression/seed` 経由で固定フィクスチャを投入します。
+- 基準画像は `tests/e2e/game-show-visual.spec.ts-snapshots/` に保存されます。
+- `./vendor/bin/sail up -d` 済みであることが前提です。
+- 打撃画面の走者状態は `tests/Feature/OffenseStateFlowTest.php` で保護しています。
+
 デプロイ前の最低限チェック:
 
 ```bash
 ./vendor/bin/sail artisan test
 ./vendor/bin/sail artisan view:cache
 npm run build
+npm run test:e2e
 ```
 
 テスト追加時の目安:
 
-- Controller の分岐より Service の業務ルールを固定するテストを優先してください。
+- Controller の分岐より Service のビジネスルールを固定するテストを優先してください。
 - DB を使う Feature テストは `RefreshDatabase` を使います。
 - マスタデータが必要なテストは `MasterDataSeeder` を seed してください。
 - Google Sheets は実APIを叩かず、`GoogleSheetsOrderImporter` を mock してください。
-- 打撃成績は「新規」「重複検知」「確認後更新」「HTML構造維持」を重点的に守ってください。
+- 打撃成績は「新規」「重複警告」「確認後の2打席目追加」「HTML構造維持」を重点的に守ってください。
 
 ## 打撃成績入力の注意点
 
 打撃成績登録は衝突しやすいため、`BattingStatService` で同じ試合・同じイニング・同じ打者の処理を守っています。
 
 - MySQL では短時間の名前付きロックを使います。
-- 既存行がある場合は即上書きせず、画面上で「現在の入力内容で更新する」か「やめる」を選ばせます。
-- `conflictResolution=update` が送られた場合のみ既存行を更新します。
+- `batting_stats.inningTurn` で同一イニング内の1打席目 / 2打席目 / 3打席目を表現します。
+- 既存打席がある場合でも、打者一巡後なら `inningTurn = 2, 3...` として新規追加します。
+- まだそのイニングの全打者分が揃っていない段階で同じ打者を登録する場合は、誤入力防止の確認を出します。
+- `confirmationResolution=duplicate` が送られた場合のみ、重複警告を越えて同一イニングの追加打席または編集移動を確定します。
+- 打撃登録画面では、現在の打者・現在の塁状況と一致する入力に限って、`打点0` や打点不足が不自然なケースを警告します。
+  例: 満塁で四球/死球、満塁や三塁走者ありでの安打、二三塁での二塁打、走者ありの三塁打、本塁打。
+  本塁アウトなどで打点が付かない特殊ケースは `confirmationResolution=rbi` で確認後にそのまま登録できます。
 - テスト環境など MySQL 以外では名前付きロックを使わず、通常の衝突検知のみ実行します。
+
+## 走者状況管理の注意点
+
+走塁イベントは `base_running_events` と `game_offense_states` で管理します。打撃入力画面の `走者操作` はここを使って現在のイニング、アウト数、塁上走者を再構築します。
+
+- `game_offense_states` は現在状態のキャッシュです
+- `base_running_events` は盗塁、進塁、牽制死、走塁死、手動配置などの履歴です
+- 旧 `steals` テーブルの既存データは migration で `base_running_events` にバックフィルされます
+- 現在のイニングと次打者は、打撃結果だけでなく走塁イベントも加味して初期表示します
+- `manual_place` は牽制死や記録遅延で塁状況がズレた時の補正用です
+- 走者操作も打撃登録と同じ試合同士で排他制御しています
 
 ## Google スプレッドシート打順反映
 

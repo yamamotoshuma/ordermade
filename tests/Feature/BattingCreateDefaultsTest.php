@@ -6,11 +6,13 @@ use App\Models\User;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\BuildsBattingTestData;
 use Tests\TestCase;
 
 class BattingCreateDefaultsTest extends TestCase
 {
     use RefreshDatabase;
+    use BuildsBattingTestData;
 
     protected function setUp(): void
     {
@@ -156,11 +158,14 @@ class BattingCreateDefaultsTest extends TestCase
         $response->assertDontSee('登録外打者', false);
     }
 
-    public function test_duplicate_create_shows_conflict_choice_without_overwriting_existing_stat(): void
+    public function test_duplicate_create_shows_warning_without_creating_second_plate_appearance_when_inning_is_not_complete(): void
     {
         $viewer = User::factory()->create();
         $batter = User::factory()->create(['name' => '重複打者']);
+        $otherBatter = User::factory()->create(['name' => '別打者']);
         $gameId = $this->createGame();
+        $this->insertOrder($gameId, 1, $batter->id);
+        $this->insertOrder($gameId, 2, $otherBatter->id, 4);
         $this->insertBattingStat($gameId, $batter->id, 1, 11, 18, 31);
 
         $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
@@ -173,9 +178,7 @@ class BattingCreateDefaultsTest extends TestCase
         ]);
 
         $response->assertRedirect(route('batting.create', ['game' => $gameId]));
-        $response->assertSessionHas('batting_conflict', function (array $conflict): bool {
-            return str_contains($conflict['message'], '既存データを更新しますか');
-        });
+        $this->assertBattingConfirmation($response, 'duplicate', null, '誤入力の可能性があります');
         $response->assertSessionHasInput('resultId1', 13);
 
         $this->assertSame(1, DB::table('batting_stats')->where('gameId', $gameId)->count());
@@ -189,11 +192,14 @@ class BattingCreateDefaultsTest extends TestCase
         ]);
     }
 
-    public function test_duplicate_create_can_update_existing_stat_after_confirmation(): void
+    public function test_duplicate_create_can_add_second_plate_appearance_after_confirmation(): void
     {
         $viewer = User::factory()->create();
         $batter = User::factory()->create(['name' => '更新打者']);
+        $otherBatter = User::factory()->create(['name' => '他打者']);
         $gameId = $this->createGame();
+        $this->insertOrder($gameId, 1, $batter->id);
+        $this->insertOrder($gameId, 2, $otherBatter->id, 4);
         $this->insertBattingStat($gameId, $batter->id, 1, 11, 18, 31);
 
         $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
@@ -203,14 +209,14 @@ class BattingCreateDefaultsTest extends TestCase
             'resultId1' => 13,
             'resultId2' => 29,
             'resultId3' => 32,
-            'conflictResolution' => 'update',
+            'confirmationResolution' => 'duplicate',
         ]);
 
         $response->assertRedirect(route('batting.create', ['game' => $gameId]));
         $response->assertSessionMissing('message');
         $response->assertSessionHas('last_batting_stat_id');
 
-        $this->assertSame(1, DB::table('batting_stats')->where('gameId', $gameId)->count());
+        $this->assertSame(2, DB::table('batting_stats')->where('gameId', $gameId)->count());
         $this->assertDatabaseHas('batting_stats', [
             'gameId' => $gameId,
             'userId' => $batter->id,
@@ -218,26 +224,268 @@ class BattingCreateDefaultsTest extends TestCase
             'resultId1' => 13,
             'resultId2' => 29,
             'resultId3' => 32,
+            'inningTurn' => 2,
+        ]);
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $batter->id,
+            'inning' => 1,
+            'resultId1' => 11,
+            'resultId2' => 18,
+            'resultId3' => 31,
+            'inningTurn' => 1,
         ]);
     }
 
-    public function test_create_screen_renders_conflict_update_action(): void
+    public function test_duplicate_create_confirmation_can_restore_pending_payload_without_visible_form_fields(): void
+    {
+        $viewer = User::factory()->create();
+        $batter = User::factory()->create(['name' => '再送打者']);
+        $otherBatter = User::factory()->create(['name' => '他打者']);
+        $gameId = $this->createGame();
+        $this->insertOrder($gameId, 1, $batter->id);
+        $this->insertOrder($gameId, 2, $otherBatter->id, 4);
+        $this->insertBattingStat($gameId, $batter->id, 1, 11, 18, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $batter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 13,
+            'resultId2' => 29,
+            'resultId3' => 32,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('batting_confirmation');
+
+        $confirmResponse = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'confirmationResolution' => 'duplicate',
+        ]);
+
+        $confirmResponse->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $confirmResponse->assertSessionHas('last_batting_stat_id');
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $batter->id,
+            'inning' => 1,
+            'inningTurn' => 2,
+            'resultId1' => 13,
+            'resultId2' => 29,
+            'resultId3' => 32,
+        ]);
+    }
+
+    public function test_duplicate_create_auto_adds_second_plate_appearance_after_full_cycle(): void
+    {
+        $viewer = User::factory()->create();
+        $firstBatter = User::factory()->create(['name' => '一巡一番']);
+        $secondBatter = User::factory()->create(['name' => '一巡二番']);
+        $gameId = $this->createGame();
+        $this->insertOrder($gameId, 1, $firstBatter->id);
+        $this->insertOrder($gameId, 2, $secondBatter->id, 4);
+        $this->insertBattingStat($gameId, $firstBatter->id, 1, 11, 18, 31);
+        $this->insertBattingStat($gameId, $secondBatter->id, 1, 13, 29, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $firstBatter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 32,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionMissing('batting_confirmation');
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $firstBatter->id,
+            'inning' => 1,
+            'inningTurn' => 2,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 32,
+        ]);
+    }
+
+    public function test_create_warns_when_current_bases_loaded_hit_has_zero_rbi(): void
+    {
+        $viewer = User::factory()->create();
+        $firstBatter = User::factory()->create(['name' => '一番']);
+        $secondBatter = User::factory()->create(['name' => '二番']);
+        $thirdBatter = User::factory()->create(['name' => '三番']);
+        $fourthBatter = User::factory()->create(['name' => '四番']);
+        $gameId = $this->createGame();
+
+        $this->insertOrder($gameId, 1, $firstBatter->id);
+        $this->insertOrder($gameId, 2, $secondBatter->id, 4);
+        $this->insertOrder($gameId, 3, $thirdBatter->id, 7);
+        $this->insertOrder($gameId, 4, $fourthBatter->id, 3);
+
+        $this->insertBattingStat($gameId, $firstBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $secondBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $thirdBatter->id, 1, 5, 36, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $fourthBatter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $this->assertBattingConfirmation($response, 'rbi', '打点', '満塁');
+        $this->assertSessionContains($response, 'batting_confirmation.message', '0打点');
+        $this->assertSame(3, DB::table('batting_stats')->where('gameId', $gameId)->count());
+    }
+
+    public function test_create_can_continue_after_rbi_warning_confirmation(): void
+    {
+        $viewer = User::factory()->create();
+        $firstBatter = User::factory()->create(['name' => '一番']);
+        $secondBatter = User::factory()->create(['name' => '二番']);
+        $thirdBatter = User::factory()->create(['name' => '三番']);
+        $fourthBatter = User::factory()->create(['name' => '四番']);
+        $gameId = $this->createGame();
+
+        $this->insertOrder($gameId, 1, $firstBatter->id);
+        $this->insertOrder($gameId, 2, $secondBatter->id, 4);
+        $this->insertOrder($gameId, 3, $thirdBatter->id, 7);
+        $this->insertOrder($gameId, 4, $fourthBatter->id, 3);
+
+        $this->insertBattingStat($gameId, $firstBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $secondBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $thirdBatter->id, 1, 5, 36, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $fourthBatter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+            'confirmationResolution' => 'rbi',
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('last_batting_stat_id');
+        $response->assertSessionMissing('batting_confirmation');
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $fourthBatter->id,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+    }
+
+    public function test_rbi_warning_confirmation_can_restore_pending_payload_without_visible_form_fields(): void
+    {
+        $viewer = User::factory()->create();
+        $firstBatter = User::factory()->create(['name' => '一番']);
+        $secondBatter = User::factory()->create(['name' => '二番']);
+        $thirdBatter = User::factory()->create(['name' => '三番']);
+        $fourthBatter = User::factory()->create(['name' => '四番']);
+        $gameId = $this->createGame();
+
+        $this->insertOrder($gameId, 1, $firstBatter->id);
+        $this->insertOrder($gameId, 2, $secondBatter->id, 4);
+        $this->insertOrder($gameId, 3, $thirdBatter->id, 7);
+        $this->insertOrder($gameId, 4, $fourthBatter->id, 3);
+
+        $this->insertBattingStat($gameId, $firstBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $secondBatter->id, 1, 5, 36, 31);
+        $this->insertBattingStat($gameId, $thirdBatter->id, 1, 5, 36, 31);
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'userId' => $fourthBatter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('batting_confirmation');
+
+        $confirmResponse = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'confirmationResolution' => 'rbi',
+        ]);
+
+        $confirmResponse->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $confirmResponse->assertSessionHas('last_batting_stat_id');
+        $confirmResponse->assertSessionMissing('error');
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $fourthBatter->id,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+    }
+
+    public function test_store_can_resolve_batter_from_selected_order_id_even_if_hidden_inputs_are_empty(): void
+    {
+        $viewer = User::factory()->create();
+        $batter = User::factory()->create(['name' => '打順解決打者']);
+        $gameId = $this->createGame();
+        $orderId = DB::table('batting_orders')->insertGetId([
+            'gameId' => $gameId,
+            'battingOrder' => 1,
+            'positionId' => 8,
+            'userId' => $batter->id,
+            'userName' => null,
+            'ranking' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'orderId');
+
+        $response = $this->actingAs($viewer)->post(route('batting.store', ['game' => $gameId]), [
+            'selectedOrderId' => $orderId,
+            'userId' => '',
+            'userName' => '',
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $this->assertDatabaseHas('batting_stats', [
+            'gameId' => $gameId,
+            'userId' => $batter->id,
+            'userName' => null,
+            'inning' => 1,
+            'resultId1' => 1,
+            'resultId2' => 24,
+            'resultId3' => 31,
+        ]);
+    }
+
+    public function test_create_screen_renders_duplicate_create_action(): void
     {
         $viewer = User::factory()->create();
         $gameId = $this->createGame();
 
         $response = $this->actingAs($viewer)
             ->withSession([
-                'batting_conflict' => [
-                    'statsId' => 123,
-                    'message' => 'すでに打撃データが存在します。既存データを更新しますか？',
+                'batting_confirmation' => [
+                    'title' => '同じ打者・同じイニングの打撃がすでに登録されています。',
+                    'message' => 'まだ全打者分が入力されていません。このまま追加登録しますか？',
+                    'resolution' => 'duplicate',
                 ],
             ])
             ->get(route('batting.create', ['game' => $gameId]));
 
         $response->assertOk();
-        $response->assertSee('同じ打者・同じイニングの成績がすでに登録されています。', false);
-        $response->assertSee('現在の入力内容で更新する', false);
+        $response->assertSee('同じ打者・同じイニングの打撃がすでに登録されています。', false);
+        $response->assertSee('このまま追加する', false);
     }
 
     public function test_successful_create_renders_latest_input_card_and_fixed_submit_bar(): void
@@ -308,34 +556,10 @@ class BattingCreateDefaultsTest extends TestCase
         $this->assertDatabaseMissing('batting_stats', ['id' => $battingStatId]);
     }
 
-    private function createGame(): int
+    private function assertSessionContains($response, string $key, string $expectedSubstring): void
     {
-        return DB::table('games')->insertGetId([
-            'gameName' => 'テスト試合',
-            'year' => 2026,
-            'gameDates' => now(),
-            'enemyName' => 'テスト相手',
-            'gameFirstFlg' => 0,
-            'winFlg' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ], 'gameId');
-    }
-
-    private function insertBattingStat(int $gameId, int $userId, int $inning, int $resultId1, int $resultId2, int $resultId3): int
-    {
-        return DB::table('batting_stats')->insertGetId([
-            'gameId' => $gameId,
-            'userId' => $userId,
-            'userName' => null,
-            'inning' => $inning,
-            'resultId1' => $resultId1,
-            'resultId2' => $resultId2,
-            'resultId3' => $resultId3,
-            'resultId4' => null,
-            'resultId5' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $response->assertSessionHas($key, function ($value) use ($expectedSubstring): bool {
+            return str_contains((string) $value, $expectedSubstring);
+        });
     }
 }
