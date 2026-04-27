@@ -6,6 +6,7 @@ use App\Models\BattingOrder;
 use App\Models\Game;
 use App\Models\Positions;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -14,11 +15,19 @@ class BattingOrderService
     /**
      * 打順編集画面に必要なマスタと既存打順をまとめて返す。
      */
-    public function getEditData(string $gameId): array
+    public function getEditData(string $gameId, array $oldInput = []): array
     {
+        $orders = BattingOrder::where('gameId', $gameId)
+            ->with('position', 'user')
+            ->orderBy('battingOrder')
+            ->orderBy('ranking')
+            ->orderBy('orderId')
+            ->get();
+
         return [
             'positions' => Positions::all(),
-            'orders' => BattingOrder::where('gameId', $gameId)->with('position', 'user')->get(),
+            'orders' => $orders,
+            'orderRows' => $this->buildEditRows($orders, $oldInput),
             'users' => User::where('active_flg', 1)->get(),
             'id' => $gameId,
         ];
@@ -91,8 +100,12 @@ class BattingOrderService
                 throw new RuntimeException('打順を正しく入力してください。');
             }
 
-            if ($positionId === '') {
+            if ($positionId === '' || ! is_numeric($positionId)) {
                 throw new RuntimeException('守備位置を入力してください。');
+            }
+
+            if ($userId !== '' && ! is_numeric($userId)) {
+                throw new RuntimeException('選手を正しく選択してください。');
             }
 
             if ($userId !== '' && $userName !== '') {
@@ -114,6 +127,111 @@ class BattingOrderService
         }
 
         return $this->normalizeRankings($data);
+    }
+
+    /**
+     * 編集画面でそのまま描画できる行配列を作る。
+     */
+    private function buildEditRows(Collection $orders, array $oldInput): array
+    {
+        if (isset($oldInput['battingOrder']) && is_array($oldInput['battingOrder'])) {
+            return $this->buildEditRowsFromOldInput($oldInput);
+        }
+
+        $rows = [];
+        $maxBattingOrder = max(9, (int) ($orders->max('battingOrder') ?? 0));
+        $groupedOrders = $orders->groupBy(fn (BattingOrder $order): int => (int) $order->battingOrder);
+
+        for ($battingOrder = 1; $battingOrder <= $maxBattingOrder; $battingOrder++) {
+            $orderGroup = $groupedOrders->get($battingOrder, collect());
+
+            if ($orderGroup->isEmpty()) {
+                $rows[] = $this->makeEditRow((string) $battingOrder, '', '', '', 1);
+                continue;
+            }
+
+            foreach ($orderGroup as $order) {
+                $rows[] = $this->makeEditRow(
+                    (string) $battingOrder,
+                    (string) $order->positionId,
+                    $order->userId === null ? '' : (string) $order->userId,
+                    (string) ($order->userName ?? ''),
+                    (int) ($order->ranking ?? 1)
+                );
+            }
+        }
+
+        return $this->normalizeEditRowRankings($rows);
+    }
+
+    /**
+     * 保存エラー時は入力済みの行を優先して再表示する。
+     */
+    private function buildEditRowsFromOldInput(array $oldInput): array
+    {
+        $battingOrders = is_array($oldInput['battingOrder'] ?? null) ? $oldInput['battingOrder'] : [];
+        $positionIds = is_array($oldInput['positionId'] ?? null) ? $oldInput['positionId'] : [];
+        $userIds = is_array($oldInput['userId'] ?? null) ? $oldInput['userId'] : [];
+        $userNames = is_array($oldInput['userName'] ?? null) ? $oldInput['userName'] : [];
+        $rankings = is_array($oldInput['ranking'] ?? null) ? $oldInput['ranking'] : [];
+        $rowCount = max(
+            9,
+            count($battingOrders),
+            count($positionIds),
+            count($userIds),
+            count($userNames)
+        );
+        $rows = [];
+
+        for ($index = 0; $index < $rowCount; $index++) {
+            $rows[] = $this->makeEditRow(
+                (string) ($battingOrders[$index] ?? ($index + 1)),
+                (string) ($positionIds[$index] ?? ''),
+                (string) ($userIds[$index] ?? ''),
+                (string) ($userNames[$index] ?? ''),
+                (int) ($rankings[$index] ?? 1)
+            );
+        }
+
+        return $this->normalizeEditRowRankings($rows);
+    }
+
+    private function makeEditRow(
+        string $battingOrder,
+        string $positionId,
+        string $userId,
+        string $userName,
+        int $ranking
+    ): array {
+        return [
+            'battingOrder' => $battingOrder,
+            'positionId' => $positionId,
+            'userId' => $userId,
+            'userName' => $userName,
+            'ranking' => max(1, $ranking),
+        ];
+    }
+
+    /**
+     * 画面表示用の ranking も保存時と同じルールで揃える。
+     */
+    private function normalizeEditRowRankings(array $rows): array
+    {
+        $rankings = [];
+
+        foreach ($rows as $index => $row) {
+            $battingOrder = trim((string) ($row['battingOrder'] ?? ''));
+
+            if ($battingOrder === '') {
+                $rows[$index]['ranking'] = 1;
+                continue;
+            }
+
+            $rankings[$battingOrder] = ($rankings[$battingOrder] ?? 0) + 1;
+            $rows[$index]['ranking'] = $rankings[$battingOrder];
+        }
+
+        return $rows;
     }
 
     /**

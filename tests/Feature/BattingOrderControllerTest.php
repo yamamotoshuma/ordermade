@@ -51,6 +51,56 @@ class BattingOrderControllerTest extends TestCase
         $this->assertSame('助っ人', $orders[2]->userName);
     }
 
+    public function test_edit_screen_renders_mobile_friendly_order_rows(): void
+    {
+        $authUser = User::factory()->create();
+        $player = User::factory()->create(['name' => '一番太郎']);
+        $gameId = $this->createGame();
+
+        DB::table('batting_orders')->insert([
+            'gameId' => $gameId,
+            'battingOrder' => 1,
+            'positionId' => 5,
+            'userId' => $player->id,
+            'userName' => null,
+            'ranking' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($authUser)->get(route('order.edit', ['order' => $gameId]));
+
+        $response->assertOk();
+        $response->assertSee('data-order-edit-page', false);
+        $response->assertSee('data-order-rows', false);
+        $response->assertSee('スプレッドシート反映');
+        $response->assertSee('一番太郎');
+        $this->assertSame(10, substr_count($response->getContent(), "data-order-row\n"));
+    }
+
+    public function test_edit_screen_repopulates_old_input_after_store_error(): void
+    {
+        $authUser = User::factory()->create();
+        $player = User::factory()->create();
+        $gameId = $this->createGame();
+
+        $response = $this->actingAs($authUser)->post(route('order.store'), [
+            'gameId' => $gameId,
+            'battingOrder' => [1],
+            'positionId' => [1],
+            'userId' => [$player->id],
+            'userName' => ['助っ人入力'],
+            'ranking' => [1],
+        ]);
+
+        $response->assertRedirect(route('order.edit', ['order' => $gameId]));
+        $response->assertSessionHas('error', '選手と選手名は同時に入力しないでください。');
+
+        $this->get(route('order.edit', ['order' => $gameId]))
+            ->assertOk()
+            ->assertSee('助っ人入力');
+    }
+
     public function test_import_from_spreadsheet_skips_invalid_rows_and_uses_aliases_without_error(): void
     {
         config([

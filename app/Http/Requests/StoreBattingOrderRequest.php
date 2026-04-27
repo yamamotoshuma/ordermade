@@ -22,10 +22,15 @@ class StoreBattingOrderRequest extends FormRequest
         return [
             'gameId' => ['required', 'exists:games,gameId'],
             'battingOrder' => ['nullable', 'array'],
+            'battingOrder.*' => ['nullable', 'integer', 'min:1'],
             'positionId' => ['nullable', 'array'],
+            'positionId.*' => ['nullable', 'integer', 'exists:positions,positionId'],
             'userId' => ['nullable', 'array'],
+            'userId.*' => ['nullable', 'integer', 'exists:users,id'],
             'userName' => ['nullable', 'array'],
+            'userName.*' => ['nullable', 'string', 'max:255'],
             'ranking' => ['nullable', 'array'],
+            'ranking.*' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

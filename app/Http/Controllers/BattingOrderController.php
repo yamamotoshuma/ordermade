@@ -6,6 +6,7 @@ use App\Http\Requests\StoreBattingOrderRequest;
 use App\Services\BattingOrderService;
 use App\Services\GoogleSheetsOrderImporter;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use RuntimeException;
 
 class BattingOrderController extends Controller
@@ -75,9 +76,9 @@ class BattingOrderController extends Controller
         //
     }
 
-    public function edit(string $id)
+    public function edit(string $id, Request $request)
     {
-        return view('order.edit', $this->battingOrderService->getEditData($id));
+        return view('order.edit', $this->battingOrderService->getEditData($id, $request->old()));
     }
 
     public function update(string $id)
