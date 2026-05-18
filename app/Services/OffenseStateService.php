@@ -34,6 +34,8 @@ class OffenseStateService
 
     public const EVENT_CLEAR_BASE = 'clear_base';
 
+    public const EVENT_STATE_CORRECTION = 'state_correction';
+
     /**
      * 走塁イベントと打撃結果を再生し、現在の攻撃状況をキャッシュする。
      */
@@ -79,6 +81,7 @@ class OffenseStateService
         $currentOutCount = (int) $state->outCount;
 
         $manualRunnerOptions = $this->buildManualRunnerOptions($orders, $state);
+        $stateCorrectionOptions = $this->buildStateCorrectionOptions($orders);
         $combinedOutCounts = $this->buildCombinedInningOutCounts(
             $battingStats,
             BaseRunningEvent::where('gameId', $game->gameId)->get()
@@ -105,6 +108,15 @@ class OffenseStateService
                     $this->buildBaseView(3, $this->participantFromState($state, 'third', $orders)),
                 ],
                 'manualRunnerOptions' => $manualRunnerOptions,
+                'stateCorrectionOptions' => $stateCorrectionOptions,
+                'correction' => [
+                    'inning' => (int) $state->inning,
+                    'outCount' => $currentOutCount,
+                    'batterOrderId' => $state->batterOrderId ? (int) $state->batterOrderId : null,
+                    'firstOrderId' => $state->firstOrderId ? (int) $state->firstOrderId : null,
+                    'secondOrderId' => $state->secondOrderId ? (int) $state->secondOrderId : null,
+                    'thirdOrderId' => $state->thirdOrderId ? (int) $state->thirdOrderId : null,
+                ],
             ],
         ];
     }
@@ -198,6 +210,7 @@ class OffenseStateService
 
             $event = BaseRunningEvent::where('gameId', $game->gameId)
                 ->where('affectsState', true)
+                ->whereIn('eventType', $this->runnerOperationEventTypes())
                 ->orderBy('created_at', 'desc')
                 ->orderBy('id', 'desc')
                 ->first();
@@ -208,6 +221,44 @@ class OffenseStateService
 
             BaseRunningEvent::whereIn('id', $this->collectOperationEventIds($game, $event))->delete();
             $this->syncCachedState($game);
+        });
+    }
+
+    /**
+     * 誤操作復旧用に、現在のイニング・アウト・次打者・塁状況を履歴イベントとして上書きする。
+     */
+    public function correctState(Game $game, array $payload): GameOffenseState
+    {
+        return $this->withGameStateLock($game, function () use ($game, $payload): GameOffenseState {
+            $state = $this->syncCachedState($game);
+            $this->assertExpectedVersion($game, (int) ($payload['offenseStateVersion'] ?? 0));
+
+            $orders = $this->loadSelectableOrders($game);
+            $correction = $this->buildStateCorrectionPayload($orders, $payload);
+            $operationId = (string) Str::uuid();
+
+            BaseRunningEvent::create([
+                'gameId' => $game->gameId,
+                'inning' => $correction['inning'],
+                'actorOrderId' => $correction['batter']['orderId'] ?? null,
+                'actorUserId' => $correction['batter']['userId'] ?? null,
+                'actorUserName' => $correction['batter']['userName'] ?? null,
+                'startBase' => null,
+                'endBase' => null,
+                'eventType' => self::EVENT_STATE_CORRECTION,
+                'outsRecorded' => 0,
+                'affectsState' => true,
+                'stateVersion' => (int) $state->version,
+                'createdBy' => Auth::id(),
+                'meta' => $this->buildOperationMeta(
+                    $operationId,
+                    self::EVENT_STATE_CORRECTION,
+                    '状態修正',
+                    ['state' => $correction]
+                ),
+            ]);
+
+            return $this->syncCachedState($game);
         });
     }
 
@@ -486,6 +537,12 @@ class OffenseStateService
      */
     private function applyRunnerEvent(array &$state, BaseRunningEvent $event, Collection $orders): void
     {
+        if ($event->eventType === self::EVENT_STATE_CORRECTION) {
+            $this->applyStateCorrection($state, $event, $orders);
+
+            return;
+        }
+
         $participant = $this->participantFromEvent($event, $orders);
 
         if (in_array($event->eventType, [self::EVENT_STOLEN_BASE, self::EVENT_ADVANCE, self::EVENT_CAUGHT_STEALING, self::EVENT_PICKOFF_OUT, self::EVENT_RUNNER_OUT, self::EVENT_MANUAL_PLACE], true)) {
@@ -512,6 +569,29 @@ class OffenseStateService
             $state['bases'] = [1 => null, 2 => null, 3 => null];
         }
 
+        $state['needsRunnerConfirmation'] = false;
+        $state['runnerConfirmationMessage'] = null;
+    }
+
+    /**
+     * 状態補正イベントに保存されたスナップショットで現在状態を上書きする。
+     */
+    private function applyStateCorrection(array &$state, BaseRunningEvent $event, Collection $orders): void
+    {
+        $snapshot = data_get($event->meta, 'state', []);
+
+        if (! is_array($snapshot)) {
+            return;
+        }
+
+        $state['inning'] = max(1, (int) ($snapshot['inning'] ?? $state['inning']));
+        $state['outCount'] = max(0, min(2, (int) ($snapshot['outCount'] ?? $state['outCount'])));
+        $state['batter'] = $this->participantFromCorrectionMeta($snapshot['batter'] ?? null, $orders);
+        $state['bases'] = [
+            1 => $this->participantFromCorrectionMeta(data_get($snapshot, 'bases.1'), $orders),
+            2 => $this->participantFromCorrectionMeta(data_get($snapshot, 'bases.2'), $orders),
+            3 => $this->participantFromCorrectionMeta(data_get($snapshot, 'bases.3'), $orders),
+        ];
         $state['needsRunnerConfirmation'] = false;
         $state['runnerConfirmationMessage'] = null;
     }
@@ -616,6 +696,65 @@ class OffenseStateService
             )],
             default => throw new RuntimeException('不正な走者操作です。'),
         };
+    }
+
+    /**
+     * 手動補正フォームの値から状態スナップショットを作る。
+     */
+    private function buildStateCorrectionPayload(Collection $orders, array $payload): array
+    {
+        $selectedOrderIds = collect([
+            $payload['batterOrderId'] ?? null,
+            $payload['firstOrderId'] ?? null,
+            $payload['secondOrderId'] ?? null,
+            $payload['thirdOrderId'] ?? null,
+        ])->filter(fn ($orderId): bool => filled($orderId))->map(fn ($orderId): int => (int) $orderId)->values();
+
+        if ($selectedOrderIds->duplicates()->isNotEmpty()) {
+            throw new RuntimeException('同じ選手を複数の場所には設定できません。');
+        }
+
+        return [
+            'inning' => max(1, (int) ($payload['inning'] ?? 1)),
+            'outCount' => max(0, min(2, (int) ($payload['outCount'] ?? 0))),
+            'batter' => $this->participantMeta($this->participantFromCorrectionOrderId($orders, $payload['batterOrderId'] ?? null)),
+            'bases' => [
+                1 => $this->participantMeta($this->participantFromCorrectionOrderId($orders, $payload['firstOrderId'] ?? null)),
+                2 => $this->participantMeta($this->participantFromCorrectionOrderId($orders, $payload['secondOrderId'] ?? null)),
+                3 => $this->participantMeta($this->participantFromCorrectionOrderId($orders, $payload['thirdOrderId'] ?? null)),
+            ],
+        ];
+    }
+
+    private function participantFromCorrectionOrderId(Collection $orders, mixed $orderId): ?array
+    {
+        if (! filled($orderId)) {
+            return null;
+        }
+
+        $order = $orders->firstWhere('orderId', (int) $orderId);
+
+        if (! $order) {
+            throw new RuntimeException('選択した選手が現在の打順に存在しません。');
+        }
+
+        return $this->participantFromOrder($order);
+    }
+
+    private function participantMeta(?array $participant): ?array
+    {
+        if (! $participant) {
+            return null;
+        }
+
+        return [
+            'orderId' => $participant['orderId'] ?? null,
+            'battingOrder' => $participant['battingOrder'] ?? null,
+            'ranking' => $participant['ranking'] ?? null,
+            'userId' => $participant['userId'] ?? null,
+            'userName' => $participant['userName'] ?? null,
+            'displayName' => $participant['displayName'] ?? null,
+        ];
     }
 
     /**
@@ -832,6 +971,40 @@ class OffenseStateService
             'userId' => $event->actorUserId ? (int) $event->actorUserId : null,
             'userName' => $event->actorUserId ? null : ($event->actorUserName ?: null),
             'displayName' => $this->resolveParticipantName($order, $event->actorUserName),
+        ];
+    }
+
+    /**
+     * 状態補正イベントに保存した参加者情報を現在の打順に合わせて戻す。
+     */
+    private function participantFromCorrectionMeta(mixed $meta, Collection $orders): ?array
+    {
+        if (! is_array($meta)) {
+            return null;
+        }
+
+        $orderId = ! empty($meta['orderId']) ? (int) $meta['orderId'] : null;
+        $order = $orderId ? $orders->firstWhere('orderId', $orderId) : null;
+
+        if ($order) {
+            return $this->participantFromOrder($order);
+        }
+
+        $userId = ! empty($meta['userId']) ? (int) $meta['userId'] : null;
+        $userName = trim((string) ($meta['userName'] ?? ''));
+        $displayName = trim((string) ($meta['displayName'] ?? $userName));
+
+        if (! $userId && $userName === '' && $displayName === '') {
+            return null;
+        }
+
+        return [
+            'orderId' => $orderId,
+            'battingOrder' => ! empty($meta['battingOrder']) ? (int) $meta['battingOrder'] : null,
+            'ranking' => ! empty($meta['ranking']) ? (int) $meta['ranking'] : null,
+            'userId' => $userId,
+            'userName' => $userId ? null : ($userName !== '' ? $userName : null),
+            'displayName' => $displayName,
         ];
     }
 
@@ -1124,6 +1297,41 @@ class OffenseStateService
                 'label' => $this->formatParticipantLabel($participant, ''),
             ];
         })->filter()->values()->all();
+    }
+
+    /**
+     * 状態補正フォームで選択できる打順一覧。
+     */
+    private function buildStateCorrectionOptions(Collection $orders): array
+    {
+        return $orders->map(function ($order): ?array {
+            $participant = $this->participantFromOrder($order);
+
+            if (! $participant) {
+                return null;
+            }
+
+            return [
+                'orderId' => $participant['orderId'],
+                'label' => $this->formatParticipantLabel($participant, ''),
+            ];
+        })->filter()->values()->all();
+    }
+
+    /**
+     * 直前走者操作の取り消し対象にするイベント種別。
+     */
+    private function runnerOperationEventTypes(): array
+    {
+        return [
+            self::EVENT_STOLEN_BASE,
+            self::EVENT_ADVANCE,
+            self::EVENT_CAUGHT_STEALING,
+            self::EVENT_PICKOFF_OUT,
+            self::EVENT_RUNNER_OUT,
+            self::EVENT_MANUAL_PLACE,
+            self::EVENT_CLEAR_BASE,
+        ];
     }
 
     /**

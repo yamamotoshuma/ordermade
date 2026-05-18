@@ -38,6 +38,9 @@ class OffenseStateFlowTest extends TestCase
         $response->assertSee('id="offense-state-panel"', false);
         $response->assertSee('現在の攻撃状況', false);
         $response->assertSee('走者操作', false);
+        $response->assertSee('状態修正', false);
+        $response->assertSee('id="state-correction-form"', false);
+        $response->assertSee('form="state-correction-form"', false);
         $response->assertSee('直前の走者操作を取り消す', false);
         $response->assertSee('name="offenseStateVersion"', false);
     }
@@ -94,6 +97,77 @@ class OffenseStateFlowTest extends TestCase
 
         $screen = $this->actingAs($viewer)->get(route('batting.create', ['game' => $gameId]));
         $screen->assertSee('value="2"', false);
+        $this->assertMatchesRegularExpression('/<select[^>]*id="batterSelect"[\s\S]*data-user-id="' . $thirdBatter->id . '"[\s\S]*selected/u', $screen->getContent());
+    }
+
+    public function test_manual_state_correction_restores_out_count_inning_batter_and_bases(): void
+    {
+        $viewer = User::factory()->create();
+        $firstBatter = User::factory()->create(['name' => '一番']);
+        $secondBatter = User::factory()->create(['name' => '二番']);
+        $thirdBatter = User::factory()->create(['name' => '三番']);
+        $gameId = $this->createGame();
+
+        $firstOrderId = $this->insertOrder($gameId, 1, $firstBatter->id, 8);
+        $this->insertOrder($gameId, 2, $secondBatter->id, 4);
+        $thirdOrderId = $this->insertOrder($gameId, 3, $thirdBatter->id, 6);
+
+        $this->insertBattingStat($gameId, $firstBatter->id, 1, 13, 29, 31, now()->subMinutes(2));
+        $this->insertBattingStat($gameId, $secondBatter->id, 1, 13, 29, 31, now()->subMinute());
+
+        $this->actingAs($viewer)->get(route('batting.create', ['game' => $gameId]));
+        $state = GameOffenseState::where('gameId', $gameId)->firstOrFail();
+
+        $this->actingAs($viewer)->post(route('batting.runnerEvents.store', ['game' => $gameId]), [
+            'offenseStateVersion' => $state->version,
+            'action' => 'manual_place',
+            'orderId' => $firstOrderId,
+            'userId' => $firstBatter->id,
+            'displayName' => '一番',
+            'targetBase' => 1,
+        ])->assertRedirect(route('batting.create', ['game' => $gameId]));
+
+        $state = GameOffenseState::where('gameId', $gameId)->firstOrFail();
+        $this->actingAs($viewer)->post(route('batting.runnerEvents.store', ['game' => $gameId]), [
+            'offenseStateVersion' => $state->version,
+            'action' => 'runner_out',
+            'base' => 1,
+        ])->assertRedirect(route('batting.create', ['game' => $gameId]));
+
+        $state = GameOffenseState::where('gameId', $gameId)->firstOrFail();
+        $this->assertSame(2, (int) $state->inning);
+        $this->assertSame(0, (int) $state->outCount);
+
+        $response = $this->actingAs($viewer)->post(route('batting.offenseState.update', ['game' => $gameId]), [
+            'offenseStateVersion' => $state->version,
+            'inning' => 1,
+            'outCount' => 2,
+            'batterOrderId' => $thirdOrderId,
+            'firstOrderId' => $firstOrderId,
+            'secondOrderId' => '',
+            'thirdOrderId' => '',
+        ]);
+
+        $response->assertRedirect(route('batting.create', ['game' => $gameId]));
+        $response->assertSessionHas('message', '現在の攻撃状況を修正しました');
+
+        $state = GameOffenseState::where('gameId', $gameId)->firstOrFail();
+        $this->assertSame(1, (int) $state->inning);
+        $this->assertSame(2, (int) $state->outCount);
+        $this->assertSame($thirdOrderId, (int) $state->batterOrderId);
+        $this->assertSame($firstOrderId, (int) $state->firstOrderId);
+        $this->assertSame($firstBatter->id, (int) $state->firstUserId);
+        $this->assertNull($state->secondUserId);
+        $this->assertNull($state->thirdUserId);
+        $this->assertDatabaseHas('base_running_events', [
+            'gameId' => $gameId,
+            'eventType' => 'state_correction',
+            'inning' => 1,
+            'affectsState' => 1,
+        ]);
+
+        $screen = $this->actingAs($viewer)->get(route('batting.create', ['game' => $gameId]));
+        $screen->assertSee('1回 / 2アウト');
         $this->assertMatchesRegularExpression('/<select[^>]*id="batterSelect"[\s\S]*data-user-id="' . $thirdBatter->id . '"[\s\S]*selected/u', $screen->getContent());
     }
 

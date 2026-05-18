@@ -62,6 +62,7 @@ Route::get('batting/{game}/create', [BattingEditController::class, 'create'])->m
 Route::post('batting/{game}', [BattingEditController::class, 'store'])->middleware(['auth', 'verified'])->name('batting.store');
 Route::post('batting/{game}/runner-events', [BaseRunningEventController::class, 'store'])->middleware(['auth', 'verified'])->name('batting.runnerEvents.store');
 Route::delete('batting/{game}/runner-events/latest', [BaseRunningEventController::class, 'destroyLatest'])->middleware(['auth', 'verified'])->name('batting.runnerEvents.destroyLatest');
+Route::post('batting/{game}/offense-state', [BaseRunningEventController::class, 'updateState'])->middleware(['auth', 'verified'])->name('batting.offenseState.update');
 Route::get('batting/{batting}/edit', [BattingEditController::class, 'edit'])->middleware(['auth', 'verified'])->name('batting.edit');
 Route::post('batting/{batting}/update', [BattingEditController::class, 'update'])->middleware(['auth', 'verified'])->name('batting.update');
 Route::delete('batting/{batting}/delete', [BattingEditController::class, 'destroy'])->middleware(['auth', 'verified'])->name('batting.destroy');

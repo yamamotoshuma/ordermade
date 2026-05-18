@@ -2,8 +2,11 @@ export function initOffenseStatePanel(options = {}) {
     const panel = document.getElementById('offense-state-panel');
     const sheet = document.getElementById('runner-sheet');
     const backdrop = document.getElementById('runner-sheet-backdrop');
+    const stateCorrectionSheet = document.getElementById('state-correction-sheet');
+    const stateCorrectionBackdrop = document.getElementById('state-correction-backdrop');
     const runnerEventForm = document.getElementById('runner-event-form');
     const runnerUndoForm = document.getElementById('runner-undo-form');
+    const stateCorrectionForm = document.getElementById('state-correction-form');
 
     if (!panel || !sheet || !backdrop || !runnerEventForm || !runnerUndoForm) {
         return;
@@ -13,6 +16,9 @@ export function initOffenseStatePanel(options = {}) {
     const hideLoading = options.hideLoading || (() => {});
     const openButtons = Array.from(document.querySelectorAll('[data-role="runner-sheet-open"]'));
     const closeButtons = Array.from(document.querySelectorAll('[data-role="runner-sheet-close"]'));
+    const stateCorrectionOpenButtons = Array.from(document.querySelectorAll('[data-role="state-correction-open"]'));
+    const stateCorrectionCloseButtons = Array.from(document.querySelectorAll('[data-role="state-correction-close"]'));
+    const stateCorrectionSubmitButton = document.querySelector('[data-role="state-correction-submit"]');
     const runnerActionButtons = Array.from(document.querySelectorAll('[data-role="runner-action-submit"]'));
     const runnerUndoButton = document.querySelector('[data-role="runner-undo-submit"]');
     const manualRunnerSubmitButton = document.querySelector('[data-role="manual-runner-submit"]');
@@ -55,13 +61,29 @@ export function initOffenseStatePanel(options = {}) {
         document.body.classList.remove('runner-sheet-open');
     };
 
+    const openStateCorrectionSheet = () => {
+        stateCorrectionSheet?.classList.remove('hidden');
+        stateCorrectionBackdrop?.classList.remove('hidden');
+        document.body.classList.add('runner-sheet-open');
+    };
+
+    const closeStateCorrectionSheet = () => {
+        stateCorrectionSheet?.classList.add('hidden');
+        stateCorrectionBackdrop?.classList.add('hidden');
+        document.body.classList.remove('runner-sheet-open');
+    };
+
     openButtons.forEach((button) => button.addEventListener('click', openSheet));
     closeButtons.forEach((button) => button.addEventListener('click', closeSheet));
+    stateCorrectionOpenButtons.forEach((button) => button.addEventListener('click', openStateCorrectionSheet));
+    stateCorrectionCloseButtons.forEach((button) => button.addEventListener('click', closeStateCorrectionSheet));
     backdrop.addEventListener('click', closeSheet);
+    stateCorrectionBackdrop?.addEventListener('click', closeStateCorrectionSheet);
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             closeSheet();
+            closeStateCorrectionSheet();
         }
     });
 
@@ -113,6 +135,22 @@ export function initOffenseStatePanel(options = {}) {
             userName: manualRunnerUserName.value,
             displayName: manualRunnerDisplayName.value,
         });
+    });
+
+    stateCorrectionSubmitButton?.addEventListener('click', (event) => {
+        if (!stateCorrectionForm) {
+            return;
+        }
+
+        const confirmed = window.confirm('現在のイニング・アウト・次打者・塁状況を修正します。よろしいですか？');
+
+        if (!confirmed) {
+            event.preventDefault();
+            hideLoading();
+            return;
+        }
+
+        showLoading();
     });
 
     if (panel.dataset.autoOpen === 'true') {

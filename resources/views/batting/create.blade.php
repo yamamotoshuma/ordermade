@@ -246,6 +246,9 @@
                 @method('DELETE')
                 <input type="hidden" name="offenseStateVersion" value="{{ $offenseState['version'] ?? 1 }}">
             </form>
+            <form id="state-correction-form" method="POST" action="{{ route('batting.offenseState.update', ['game' => $game]) }}" class="hidden">
+                @csrf
+            </form>
         </div>
     </div>
     <div id="loading">

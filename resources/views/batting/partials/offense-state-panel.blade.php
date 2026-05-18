@@ -2,6 +2,8 @@
     $runnerBases = $offenseState['bases'] ?? [];
     $runnerBaseMap = collect($runnerBases)->keyBy('base');
     $manualRunnerOptions = $offenseState['manualRunnerOptions'] ?? [];
+    $stateCorrectionOptions = $offenseState['stateCorrectionOptions'] ?? [];
+    $correctionState = $offenseState['correction'] ?? [];
     $stateVersion = (int) ($offenseState['version'] ?? 1);
     $baseChipPositions = [
         1 => ['top' => '66%', 'left' => '76%'],
@@ -21,9 +23,14 @@
                 次打者: {{ $offenseState['batterLabel'] ?? '未選択' }}
             </p>
         </div>
-        <button type="button" data-role="runner-sheet-open" class="inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800">
-            走者操作
-        </button>
+        <div class="grid shrink-0 gap-2">
+            <button type="button" data-role="runner-sheet-open" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800">
+                走者操作
+            </button>
+            <button type="button" data-role="state-correction-open" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
+                状態修正
+            </button>
+        </div>
     </div>
 
     @if(!empty($offenseState['needsRunnerConfirmation']))
@@ -179,5 +186,82 @@
                 <p class="mt-3 text-sm font-semibold text-slate-500">現在配置できる選手がいません。</p>
             @endif
         </section>
+    </div>
+</div>
+
+<div id="state-correction-backdrop" class="runner-sheet-backdrop hidden"></div>
+<div id="state-correction-sheet" class="runner-sheet hidden">
+    <div class="runner-sheet-panel">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">状態修正</p>
+                <p class="mt-1 text-lg font-black text-slate-900">現在の攻撃状況を修正</p>
+                <p class="mt-1 text-sm font-bold text-slate-600">{{ $offenseState['inning'] ?? 1 }}回 / {{ $offenseState['outCount'] ?? 0 }}アウト</p>
+            </div>
+            <button type="button" data-role="state-correction-close" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-black text-slate-700 shadow-sm">
+                ×
+            </button>
+        </div>
+
+        <input form="state-correction-form" type="hidden" name="offenseStateVersion" value="{{ $stateVersion }}">
+
+        <div class="mt-4 grid grid-cols-2 gap-3">
+            <label class="block">
+                <span class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">イニング</span>
+                <input form="state-correction-form" type="number" name="inning" min="1" max="99" value="{{ $correctionState['inning'] ?? ($offenseState['inning'] ?? 1) }}" class="mt-1.5 h-14 w-full rounded-2xl border border-slate-200 bg-white px-3 text-center text-xl font-black text-slate-900">
+            </label>
+
+            <label class="block">
+                <span class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">アウト</span>
+                <select form="state-correction-form" name="outCount" class="mt-1.5 h-14 w-full rounded-2xl border border-slate-200 bg-white px-3 text-center text-xl font-black text-slate-900">
+                    @for($outCount = 0; $outCount <= 2; $outCount++)
+                        <option value="{{ $outCount }}" {{ (int) ($correctionState['outCount'] ?? ($offenseState['outCount'] ?? 0)) === $outCount ? 'selected' : '' }}>
+                            {{ $outCount }}
+                        </option>
+                    @endfor
+                </select>
+            </label>
+        </div>
+
+        <label class="mt-4 block">
+            <span class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">次打者</span>
+            <select form="state-correction-form" name="batterOrderId" class="mt-1.5 h-14 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-900">
+                <option value="">未選択</option>
+                @foreach($stateCorrectionOptions as $option)
+                    <option value="{{ $option['orderId'] }}" {{ (int) ($correctionState['batterOrderId'] ?? 0) === (int) $option['orderId'] ? 'selected' : '' }}>
+                        {{ $option['label'] }}
+                    </option>
+                @endforeach
+            </select>
+        </label>
+
+        <div class="mt-4 grid gap-3">
+            @foreach([
+                ['name' => 'firstOrderId', 'label' => '一塁走者'],
+                ['name' => 'secondOrderId', 'label' => '二塁走者'],
+                ['name' => 'thirdOrderId', 'label' => '三塁走者'],
+            ] as $baseField)
+                <label class="block">
+                    <span class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{{ $baseField['label'] }}</span>
+                    <select form="state-correction-form" name="{{ $baseField['name'] }}" class="mt-1.5 h-14 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-900">
+                        <option value="">空</option>
+                        @foreach($stateCorrectionOptions as $option)
+                            <option value="{{ $option['orderId'] }}" {{ (int) ($correctionState[$baseField['name']] ?? 0) === (int) $option['orderId'] ? 'selected' : '' }}>
+                                {{ $option['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </label>
+            @endforeach
+        </div>
+
+        <div class="mt-5 grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2">
+            <button type="button" data-role="state-correction-close" class="runner-action-button runner-action-clear">
+                閉じる
+            </button>
+            <button type="submit" form="state-correction-form" data-role="state-correction-submit" class="runner-action-button runner-action-manual">
+                修正を反映
+            </button>
+        </div>
     </div>
 </div>
