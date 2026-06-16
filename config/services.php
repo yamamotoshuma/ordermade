@@ -39,4 +39,14 @@ return [
         'user_aliases' => is_array($aliases = json_decode(env('GOOGLE_ORDER_USER_ALIASES_JSON', '{}'), true)) ? $aliases : [],
     ],
 
+    'line' => [
+        'push_url' => env('LINE_PUSH_URL', 'https://api.line.me/v2/bot/message/push'),
+        'channel_access_token' => env('LINE_CHANNEL_ACCESS_TOKEN'),
+        'recipient_id' => env('LINE_RECIPIENT_ID'),
+    ],
+
+    'discord' => [
+        'webhook_url' => env('DISCORD_WEBHOOK_URL'),
+    ],
+
 ];
